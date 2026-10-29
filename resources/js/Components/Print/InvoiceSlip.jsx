@@ -1,43 +1,89 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { usePage } from '@inertiajs/react';
 import Button from '../UI/Button';
 import { Printer, X } from 'lucide-react';
 
 export default function InvoiceSlip({ invoice, onClose }) {
     const { company_setting } = usePage().props;
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        document.body.classList.add('print-modal-active');
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && onClose) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.body.classList.remove('print-modal-active');
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onClose]);
 
     if (!invoice) return null;
 
     const printSize = company_setting?.token_print_size || '80mm';
+    const customWidthMm = parseInt(company_setting?.custom_print_width) || 80;
     const companyName = company_setting?.company_name || 'Aesthetic & Dermatology Clinic';
     const companyPhone = company_setting?.company_phone || '+880 1700-000000';
     const companyEmail = company_setting?.company_email || 'info@clinicdiagnostic.com';
     const companyAddress = company_setting?.company_address || 'House #12, Road #5, Dhanmondi, Dhaka';
     const companyLogo = company_setting?.logo_url || null;
 
-    const sizeStyles = {
-        '58mm': 'w-[230px] print:w-[48mm]',
-        '80mm': 'w-[310px] print:w-[72mm]',
-        'a5': 'w-[440px] print:w-[130mm]',
-        'a4': 'w-[560px] print:w-[180mm]',
+    const getWidths = () => {
+        switch (printSize) {
+            case '58mm':
+                return { previewPx: '230px', printMm: '48mm' };
+            case '80mm':
+                return { previewPx: '310px', printMm: '72mm' };
+            case 'a5':
+                return { previewPx: '440px', printMm: '130mm' };
+            case 'a4':
+                return { previewPx: '560px', printMm: '180mm' };
+            case 'custom':
+            default: {
+                const printMmVal = Math.max(25, customWidthMm - 6);
+                const previewPxVal = Math.min(Math.max(200, Math.round(customWidthMm * 3.78)), 620);
+                return { previewPx: `${previewPxVal}px`, printMm: `${printMmVal}mm` };
+            }
+        }
     };
 
-    const targetWidthClass = sizeStyles[printSize] || sizeStyles['80mm'];
+    const { previewPx, printMm } = getWidths();
 
     const handlePrint = () => {
         window.print();
     };
 
-    return (
-        <div className="print-container fixed inset-0 z-50 overflow-y-auto px-4 py-6 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs print:static print:p-0 print:bg-transparent print:overflow-visible">
-            <div className="print-container relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 border border-slate-200 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-auto">
+    const modalContent = (
+        <div className="print-modal-container fixed inset-0 z-50 overflow-y-auto px-4 py-6 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs print:static print:p-0 print:m-0 print:bg-transparent print:overflow-visible print:block">
+            {/* Scoped Dynamic Print Isolation and Width CSS */}
+            <style>{`
+                @media print {
+                    #app {
+                        display: none !important;
+                    }
+                    .invoice-slip-card {
+                        width: ${printMm} !important;
+                        max-width: ${printMm} !important;
+                        margin: 0 !important;
+                    }
+                }
+            `}</style>
+
+            <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 border border-slate-200 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-auto print:bg-transparent">
                 {/* Modal Toolbar (hidden on print) */}
                 <div className="no-print flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
                     <div>
                         <div className="flex items-center gap-2">
                             <h4 className="font-bold text-slate-900">Treatment POS Invoice</h4>
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-mono">
-                                POS: {printSize}
+                                POS: {printSize === 'custom' ? `${customWidthMm}mm (Custom)` : printSize}
                             </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">Formatted for POS thermal printer output</p>
@@ -58,9 +104,10 @@ export default function InvoiceSlip({ invoice, onClose }) {
                 </div>
 
                 {/* Thermal Slip Container (centered in preview, full width on print) */}
-                <div className="print-container flex justify-center p-2 bg-slate-50/50 rounded-xl print:p-0 print:m-0 print:bg-transparent">
+                <div className="print-modal-container flex justify-center p-2 bg-slate-50/50 rounded-xl print:p-0 print:m-0 print:bg-transparent print:block">
                     <div
-                        className={`bg-white p-4 font-sans text-slate-800 rounded-xl border border-slate-300 shadow-sm print:shadow-none print:border-none print:p-1 print:m-0 ${targetWidthClass}`}
+                        className="invoice-slip-card bg-white p-4 font-sans text-slate-800 rounded-xl border border-slate-300 shadow-sm print:shadow-none print:border-none print:p-1.5 print:m-0"
+                        style={{ width: previewPx, maxWidth: '100%' }}
                     >
                         {/* Header Branding */}
                         <div className="text-center pb-2.5 border-b border-dashed border-slate-300">
@@ -166,4 +213,10 @@ export default function InvoiceSlip({ invoice, onClose }) {
             </div>
         </div>
     );
+
+    if (typeof document !== 'undefined' && mounted) {
+        return createPortal(modalContent, document.body);
+    }
+
+    return modalContent;
 }

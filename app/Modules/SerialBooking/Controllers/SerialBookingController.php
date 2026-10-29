@@ -32,6 +32,15 @@ class SerialBookingController extends Controller
             ->take(15)
             ->get();
 
+        $recentVisits->each(function ($visit) use ($today) {
+            $payment = Payment::where('patient_id', $visit->patient_id)
+                ->where('payment_type', 'visit')
+                ->whereDate('payment_date', $today)
+                ->latest('id')
+                ->first();
+            $visit->fee = $payment ? (string) $payment->final_paid_amount : '0.00';
+        });
+
         return Inertia::render('SerialBooking/Index', [
             'doctors' => $doctors,
             'recentVisits' => $recentVisits,

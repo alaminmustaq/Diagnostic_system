@@ -21,6 +21,8 @@ class CompanySetting extends Model
         'company_address',
         'company_logo',
         'token_print_size',
+        'custom_print_width',
+        'custom_print_height',
         'print_separate_slips',
         'token_header_note',
         'token_footer_note',
@@ -39,6 +41,8 @@ class CompanySetting extends Model
     protected function casts(): array
     {
         return [
+            'custom_print_width' => 'integer',
+            'custom_print_height' => 'integer',
             'print_separate_slips' => 'boolean',
         ];
     }
@@ -54,6 +58,8 @@ class CompanySetting extends Model
                 'company_address' => 'House #12, Road #5, Dhanmondi, Dhaka',
                 'company_logo' => null,
                 'token_print_size' => '80mm',
+                'custom_print_width' => 80,
+                'custom_print_height' => null,
                 'print_separate_slips' => true,
                 'token_header_note' => 'Patient Serial Consultation Token',
                 'token_footer_note' => 'Please wait in the reception lounge until your serial is announced.',

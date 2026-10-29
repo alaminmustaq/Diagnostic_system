@@ -128,5 +128,26 @@ class SettingsTest extends TestCase
             'token_footer_note' => 'Please have a seat in the waiting lounge.',
         ]);
     }
+
+    public function test_can_update_configuration_with_custom_manual_size(): void
+    {
+        $response = $this->actingAs($this->admin)->post('/settings/configuration', [
+            'token_print_size' => 'custom',
+            'custom_print_width' => 76,
+            'custom_print_height' => 120,
+            'print_separate_slips' => true,
+            'token_header_note' => 'Custom 76mm Token',
+            'token_footer_note' => 'Custom 76mm Footer',
+        ]);
+
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('company_settings', [
+            'token_print_size' => 'custom',
+            'custom_print_width' => 76,
+            'custom_print_height' => 120,
+            'token_header_note' => 'Custom 76mm Token',
+        ]);
+    }
 }
 

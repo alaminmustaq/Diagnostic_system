@@ -17,21 +17,46 @@
 }
 
 @media print {
+    @page {
+        margin: 0;
+    }
+
     .no-print {
         display: none !important;
     }
+
     .print-only {
         display: block !important;
     }
+
     body {
         background: white !important;
         color: black !important;
         margin: 0 !important;
         padding: 0 !important;
     }
-    aside, header, nav {
+
+    /* Completely hide background application layout (#app) when printing slip/token modal */
+    body.print-modal-active > #app {
         display: none !important;
     }
+
+    /* Fallback layout isolation */
+    body.print-modal-active aside,
+    body.print-modal-active header,
+    body.print-modal-active nav,
+    body.print-modal-active footer,
+    body.print-modal-active main > *:not(#print-modal-portal):not(.print-modal-container) {
+        display: none !important;
+    }
+
+    /* Standard background elements hidden */
+    aside, header, nav, footer {
+        display: none !important;
+    }
+
+    /* Container resets so only the thermal slips are printed from the top */
+    .print-modal-container,
     .print-container {
         position: static !important;
         background: transparent !important;
@@ -40,7 +65,19 @@
         overflow: visible !important;
         box-shadow: none !important;
         border: none !important;
+        display: block !important;
+        width: auto !important;
+        max-width: none !important;
     }
+
+    .token-slip-card,
+    .invoice-slip-card {
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: white !important;
+    }
+
     .print\:break-after-page {
         page-break-after: always !important;
         break-after: page !important;

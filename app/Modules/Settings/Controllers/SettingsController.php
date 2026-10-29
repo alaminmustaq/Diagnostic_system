@@ -113,7 +113,9 @@ class SettingsController extends Controller
     public function updateConfiguration(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'token_print_size' => ['required', 'in:80mm,58mm,a5,a4'],
+            'token_print_size' => ['required', 'in:80mm,58mm,a5,a4,custom'],
+            'custom_print_width' => ['nullable', 'numeric', 'min:30', 'max:500'],
+            'custom_print_height' => ['nullable', 'numeric', 'min:30', 'max:1000'],
             'print_separate_slips' => ['boolean'],
             'token_header_note' => ['nullable', 'string', 'max:255'],
             'token_footer_note' => ['nullable', 'string', 'max:500'],
@@ -123,6 +125,12 @@ class SettingsController extends Controller
 
         $setting->update([
             'token_print_size' => $validated['token_print_size'],
+            'custom_print_width' => $validated['token_print_size'] === 'custom'
+                ? (int) ($validated['custom_print_width'] ?? 80)
+                : ($validated['custom_print_width'] ?? $setting->custom_print_width ?? 80),
+            'custom_print_height' => $validated['token_print_size'] === 'custom' && ! empty($validated['custom_print_height'])
+                ? (int) $validated['custom_print_height']
+                : null,
             'print_separate_slips' => $request->boolean('print_separate_slips', true),
             'token_header_note' => $validated['token_header_note'] ?? null,
             'token_footer_note' => $validated['token_footer_note'] ?? null,

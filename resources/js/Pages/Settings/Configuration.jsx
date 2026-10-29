@@ -14,11 +14,17 @@ import {
     Maximize2,
     Scissors,
     Layers,
+    Ruler,
+    Stethoscope,
+    User,
+    Sparkles,
 } from 'lucide-react';
 
 export default function Configuration({ setting }) {
     const { data, setData, post, processing, errors } = useForm({
         token_print_size: setting?.token_print_size || '80mm',
+        custom_print_width: setting?.custom_print_width || 80,
+        custom_print_height: setting?.custom_print_height || '',
         print_separate_slips: setting?.print_separate_slips ?? true,
         token_header_note: setting?.token_header_note || 'Patient Serial Consultation Token',
         token_footer_note: setting?.token_footer_note || 'Please wait in the reception lounge until your serial is announced.',
@@ -30,6 +36,7 @@ export default function Configuration({ setting }) {
             title: '80mm Thermal Roll',
             description: 'Standard POS thermal printers (Epson, Xprinter, Rongta). Most popular for reception queue slips.',
             widthPx: '300px',
+            widthMm: '80mm',
             badge: 'Recommended',
         },
         {
@@ -37,6 +44,7 @@ export default function Configuration({ setting }) {
             title: '58mm Mini Thermal',
             description: 'Compact 2-inch mini receipt printers and wireless bluetooth desktop terminals.',
             widthPx: '230px',
+            widthMm: '58mm',
             badge: 'Compact',
         },
         {
@@ -44,6 +52,7 @@ export default function Configuration({ setting }) {
             title: 'A5 Half Sheet (148mm)',
             description: 'Laser or inkjet printers using half-size standard office paper.',
             widthPx: '420px',
+            widthMm: '148mm',
             badge: 'Standard Paper',
         },
         {
@@ -51,9 +60,20 @@ export default function Configuration({ setting }) {
             title: 'A4 Full Page (210mm)',
             description: 'Full-size office documents with generous margins.',
             widthPx: '540px',
+            widthMm: '210mm',
             badge: 'Full Sheet',
         },
+        {
+            id: 'custom',
+            title: 'Manual / Custom Size',
+            description: 'Set custom roll or sheet dimensions in millimeters (e.g. 76mm, 100mm, etc.).',
+            widthPx: `${Math.min(Math.max(180, Math.round((parseInt(data.custom_print_width) || 80) * 3.78)), 580)}px`,
+            widthMm: `${data.custom_print_width || 80}mm`,
+            badge: 'Custom Sizing',
+        },
     ];
+
+    const quickWidthPresets = [58, 72, 76, 80, 100, 105, 148];
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -61,6 +81,10 @@ export default function Configuration({ setting }) {
     };
 
     const currentSizeConfig = printSizes.find((s) => s.id === data.token_print_size) || printSizes[0];
+
+    const simulatedWidthPx = data.token_print_size === 'custom'
+        ? `${Math.min(Math.max(180, Math.round((parseInt(data.custom_print_width) || 80) * 3.78)), 580)}px`
+        : currentSizeConfig.widthPx;
 
     return (
         <AppLayout title="Print Configuration & POS Sizing">
@@ -116,7 +140,7 @@ export default function Configuration({ setting }) {
                                                 </div>
 
                                                 <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                                                    <span>Target: {size.id}</span>
+                                                    <span>Target: {size.id === 'custom' ? `${data.custom_print_width || 80}mm` : size.id}</span>
                                                     {isSelected && (
                                                         <span className="text-teal-700 font-bold flex items-center gap-1">
                                                             <CheckCircle2 className="w-3.5 h-3.5" /> Active
@@ -132,6 +156,73 @@ export default function Configuration({ setting }) {
                                 )}
                             </div>
 
+                            {/* Manual Size Inputs (Shown only if 'custom' is selected) */}
+                            {data.token_print_size === 'custom' && (
+                                <div className="p-4 rounded-xl bg-teal-50/50 border-2 border-teal-200 space-y-4 animate-in fade-in duration-200">
+                                    <div className="flex items-center gap-2">
+                                        <Ruler className="w-4 h-4 text-teal-700" />
+                                        <h4 className="text-sm font-bold text-teal-950">
+                                            Manual Paper Dimensions (in millimeters)
+                                        </h4>
+                                    </div>
+                                    <p className="text-xs text-slate-600">
+                                        Enter your POS printer's exact roll width or slip dimensions. Thermal paper rolls feed continuously, so width is the main dimension.
+                                    </p>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <TextInput
+                                                label="Paper Width (mm) *"
+                                                type="number"
+                                                min="30"
+                                                max="500"
+                                                placeholder="e.g. 76 or 100"
+                                                value={data.custom_print_width}
+                                                onChange={(e) => setData('custom_print_width', e.target.value)}
+                                                error={errors.custom_print_width}
+                                                helperText="Physical width of paper roll (30mm – 500mm)"
+                                            />
+                                        </div>
+                                        <div>
+                                            <TextInput
+                                                label="Paper Height (mm) (Optional)"
+                                                type="number"
+                                                min="30"
+                                                max="1000"
+                                                placeholder="Leave empty for continuous roll"
+                                                value={data.custom_print_height}
+                                                onChange={(e) => setData('custom_print_height', e.target.value)}
+                                                error={errors.custom_print_height}
+                                                helperText="Optional for pre-cut sheets or labels"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Preset Buttons */}
+                                    <div>
+                                        <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                            Quick Width Presets:
+                                        </span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {quickWidthPresets.map((preset) => (
+                                                <button
+                                                    key={preset}
+                                                    type="button"
+                                                    onClick={() => setData('custom_print_width', preset)}
+                                                    className={`px-2.5 py-1 text-xs rounded-lg font-mono font-medium border transition cursor-pointer ${
+                                                        parseInt(data.custom_print_width) === preset
+                                                            ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-teal-400'
+                                                    }`}
+                                                >
+                                                    {preset}mm
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Separate Slip Page-Break Setting */}
                             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                 <div className="flex items-start justify-between gap-4">
@@ -139,11 +230,11 @@ export default function Configuration({ setting }) {
                                         <div className="flex items-center gap-1.5">
                                             <Scissors className="w-4 h-4 text-teal-600" />
                                             <h4 className="text-sm font-bold text-slate-900">
-                                                Print Two Separate Slips (Desk & Patient Copies)
+                                                Print Two Separate Slips (Doctor & Patient Copies)
                                             </h4>
                                         </div>
                                         <p className="text-xs text-slate-500 mt-1 max-w-md">
-                                            When enabled, prints <strong>Slip 1 (Desk Copy)</strong> and <strong>Slip 2 (Patient Copy)</strong> as two independent pages with an automatic page break (<code className="text-teal-700 font-mono">break-after: page</code>). Thermal printers will cut between the slips instead of squeezing both onto one sheet.
+                                            When enabled, prints <strong>Slip 1 (Doctor Copy)</strong> and <strong>Slip 2 (Patient Copy)</strong> as two independent pages with an automatic page break (<code className="text-teal-700 font-mono">break-after: page</code>). Thermal printers will cut between the slips instead of squeezing both onto one sheet.
                                         </p>
                                     </div>
                                     <Toggle
@@ -190,26 +281,26 @@ export default function Configuration({ setting }) {
                 {/* Live Thermal Sizing Preview (Right 5 cols) */}
                 <div className="lg:col-span-5">
                     <Card
-                        title={`Live ${currentSizeConfig.title} Simulation`}
+                        title={`Live ${data.token_print_size === 'custom' ? `Custom (${data.custom_print_width || 80}mm)` : currentSizeConfig.title} Simulation`}
                         subtitle="Simulates physical printer slip dimensions and cut separator"
                     >
                         <div className="bg-slate-100 p-4 rounded-xl flex flex-col items-center justify-center min-h-[460px] overflow-x-auto">
-                            {/* Slip 1: Desk Copy */}
+                            {/* Slip 1: Doctor Copy */}
                             <div
-                                style={{ width: currentSizeConfig.widthPx }}
+                                style={{ width: simulatedWidthPx }}
                                 className="bg-white rounded-lg shadow-md border border-slate-300 p-4 font-sans text-slate-800 text-center transition-all duration-300"
                             >
                                 <div className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 text-white py-0.5 px-2 rounded inline-block mb-1">
-                                    Desk Copy
+                                    Doctor Copy
                                 </div>
                                 <h4 className="text-xs font-black uppercase text-teal-800 tracking-tight">
                                     {setting?.company_name || 'Clinic Name'}
                                 </h4>
-                                <p className="text-[10px] text-slate-500">{data.token_header_note}</p>
+                                <p className="text-[10px] text-slate-500 font-medium">Chamber Consultation Slip</p>
 
-                                <div className="my-2.5 py-1.5 bg-teal-50 border border-teal-200 rounded text-center">
-                                    <span className="text-[9px] uppercase font-bold text-teal-700">Token</span>
-                                    <p className="text-lg font-black font-mono text-teal-900">281026-001</p>
+                                <div className="my-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-center">
+                                    <span className="text-[9px] uppercase font-bold text-slate-600">Queue Token</span>
+                                    <p className="text-lg font-black font-mono text-slate-900">281026-001</p>
                                     <span className="text-[10px] font-bold text-slate-800">Serial #1</span>
                                 </div>
 
@@ -219,6 +310,10 @@ export default function Configuration({ setting }) {
                                         <span className="font-bold text-slate-800">Tanvir Ahmed</span>
                                     </div>
                                     <div className="flex justify-between">
+                                        <span className="text-slate-500">Phone:</span>
+                                        <span className="font-mono text-slate-700">01812345678</span>
+                                    </div>
+                                    <div className="flex justify-between">
                                         <span className="text-slate-500">Doctor:</span>
                                         <span className="font-semibold text-slate-800">Dr. Ariful Islam</span>
                                     </div>
@@ -226,9 +321,15 @@ export default function Configuration({ setting }) {
                                         <span className="text-slate-500">Room:</span>
                                         <span className="font-bold text-slate-800">Room 102</span>
                                     </div>
+                                    <div className="flex justify-between pt-1 border-t border-dashed border-slate-200">
+                                        <span className="text-slate-500">Fee Status:</span>
+                                        <span className="font-bold text-emerald-700">1,000.00 Tk (Paid)</span>
+                                    </div>
                                 </div>
 
-                                <p className="text-[9px] text-slate-400 mt-2">{data.token_footer_note}</p>
+                                <div className="mt-2 text-left text-[9px] text-slate-400 border border-dashed border-slate-200 p-1.5 rounded">
+                                    <span>BP: ______ | Pulse: ______ | Wt: ______</span>
+                                </div>
                             </div>
 
                             {/* Cut Line / Page Break Indicator */}
@@ -241,7 +342,7 @@ export default function Configuration({ setting }) {
 
                             {/* Slip 2: Patient Copy */}
                             <div
-                                style={{ width: currentSizeConfig.widthPx }}
+                                style={{ width: simulatedWidthPx }}
                                 className="bg-white rounded-lg shadow-md border border-slate-300 p-4 font-sans text-slate-800 text-center transition-all duration-300"
                             >
                                 <div className="text-[10px] font-bold uppercase tracking-wider bg-teal-700 text-white py-0.5 px-2 rounded inline-block mb-1">
@@ -271,6 +372,10 @@ export default function Configuration({ setting }) {
                                         <span className="text-slate-500">Room:</span>
                                         <span className="font-bold text-slate-800">Room 102</span>
                                     </div>
+                                    <div className="flex justify-between pt-1 border-t border-dashed border-slate-200">
+                                        <span className="text-slate-500">Fee Paid:</span>
+                                        <span className="font-bold text-slate-800 font-mono">1,000.00 Tk</span>
+                                    </div>
                                 </div>
 
                                 <p className="text-[9px] text-slate-400 mt-2">{data.token_footer_note}</p>
@@ -282,4 +387,3 @@ export default function Configuration({ setting }) {
         </AppLayout>
     );
 }
-

@@ -500,7 +500,7 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                                     doctor_name: visit.doctor?.name,
                                                     doctor_designation: visit.doctor?.doctor_profile?.designation,
                                                     room_number: visit.doctor?.doctor_profile?.room_number,
-                                                    fee: '0.00',
+                                                    fee: visit.fee || '0.00',
                                                 });
                                             }}
                                         >

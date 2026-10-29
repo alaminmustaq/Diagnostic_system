@@ -21,18 +21,24 @@ export default function Button({
     const variantClasses = {
         primary: 'bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500 shadow-teal-600/20',
         secondary: 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 focus:ring-slate-400',
+        dark: 'bg-slate-900 text-white hover:bg-black focus:ring-slate-800 shadow-slate-900/20',
+        indigo: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 shadow-indigo-600/20',
         success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500 shadow-emerald-600/20',
         danger: 'bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500 shadow-rose-600/20',
         warning: 'bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500 shadow-amber-500/20',
         outline: 'border border-teal-600 text-teal-700 hover:bg-teal-50 focus:ring-teal-500',
         ghost: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 shadow-none focus:ring-slate-300',
+        custom: '',
+        none: '',
     };
+
+    const resolvedVariant = variant in variantClasses ? variantClasses[variant] : variantClasses.primary;
 
     return (
         <button
             type={type}
             disabled={disabled || loading}
-            className={`${baseClasses} ${sizeClasses[size] || sizeClasses.md} ${variantClasses[variant] || variantClasses.primary} ${className}`}
+            className={`${baseClasses} ${sizeClasses[size] || sizeClasses.md} ${resolvedVariant} ${className}`}
             {...props}
         >
             {loading && (
