@@ -17,15 +17,25 @@ export function Th({ children, className = '', align = 'left' }) {
     );
 }
 
-export function Td({ children, className = '', align = 'left' }) {
+export function Td({ children, className = '', align = 'left', style }) {
     const alignClass = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
-    return <td className={`px-4 py-3.5 text-slate-700 whitespace-nowrap ${alignClass} ${className}`}>{children}</td>;
+    const hasWhitespace = className.includes('whitespace-');
+    const whitespaceClass = hasWhitespace ? '' : 'whitespace-nowrap';
+    return (
+        <td
+            style={style}
+            className={`px-4 py-3.5 text-slate-700 ${whitespaceClass} ${alignClass} ${className}`}
+        >
+            {children}
+        </td>
+    );
 }
 
-export function Tr({ children, className = '', onClick }) {
+export function Tr({ children, className = '', onClick, style }) {
     return (
         <tr
             onClick={onClick}
+            style={style}
             className={`transition-colors hover:bg-slate-50/70 ${onClick ? 'cursor-pointer' : ''} ${className}`}
         >
             {children}

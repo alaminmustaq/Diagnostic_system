@@ -63,20 +63,8 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Recalculate billing when doctor, discount or patient status changes
-    const recalculateFee = (selectedDocId, discountType, discountAmt, isExisting) => {
-        if (isExisting) {
-            // First Visit Only Policy: existing patient = 0 fee
-            setData((prev) => ({
-                ...prev,
-                base_amount: '0.00',
-                discount_type: '',
-                discount_amount: '0.00',
-                final_paid_amount: '0.00',
-            }));
-            return;
-        }
-
+    // Recalculate billing when doctor or discount changes
+    const recalculateFee = (selectedDocId, discountType, discountAmt) => {
         const doc = doctors.find((d) => d.id === parseInt(selectedDocId));
         const baseRate = doc?.doctor_profile?.default_visit_rate ? parseFloat(doc.doctor_profile.default_visit_rate) : 1000.00;
 
@@ -125,10 +113,10 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                     ...prev,
                     name: result.patient.name,
                 }));
-                recalculateFee(data.doctor_id, data.discount_type, data.discount_amount, result.has_prior_visits);
+                recalculateFee(data.doctor_id, data.discount_type, data.discount_amount);
             } else if (cleanPhone.length >= 11 && matches.length === 0) {
                 setPatientStatus({ exists: false, has_prior_visits: false, pending_follow_up: null });
-                recalculateFee(data.doctor_id, data.discount_type, data.discount_amount, false);
+                recalculateFee(data.doctor_id, data.discount_type, data.discount_amount);
             }
         } catch (err) {
             console.error('Error searching patient:', err);
@@ -145,11 +133,11 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
         }));
         setPatientStatus({
             exists: true,
-            patient: { id: patient.id, name: patient.name, phone: patient.phone },
+            patient: { id: patient.id, user_code: patient.user_code, name: patient.name, phone: patient.phone },
             has_prior_visits: patient.has_prior_visits,
             pending_follow_up: patient.pending_follow_up,
         });
-        recalculateFee(data.doctor_id, data.discount_type, data.discount_amount, patient.has_prior_visits);
+        recalculateFee(data.doctor_id, data.discount_type, data.discount_amount);
         setShowDropdown(false);
     };
 
@@ -162,22 +150,22 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
         setPatientStatus(null);
         setSuggestions([]);
         setShowDropdown(false);
-        recalculateFee(data.doctor_id, data.discount_type, data.discount_amount, false);
+        recalculateFee(data.doctor_id, data.discount_type, data.discount_amount);
     };
 
     const handleDoctorChange = (docId) => {
         setData('doctor_id', docId);
-        recalculateFee(docId, data.discount_type, data.discount_amount, patientStatus?.has_prior_visits);
+        recalculateFee(docId, data.discount_type, data.discount_amount);
     };
 
     const handleDiscountTypeChange = (type) => {
         setData('discount_type', type);
-        recalculateFee(data.doctor_id, type, data.discount_amount, patientStatus?.has_prior_visits);
+        recalculateFee(data.doctor_id, type, data.discount_amount);
     };
 
     const handleDiscountAmountChange = (amt) => {
         setData('discount_amount', amt);
-        recalculateFee(data.doctor_id, data.discount_type, amt, patientStatus?.has_prior_visits);
+        recalculateFee(data.doctor_id, data.discount_type, amt);
     };
 
     const handleSubmit = (e) => {
@@ -194,7 +182,7 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
         <AppLayout title="Serial Booking">
             <PageHeader
                 title="Patient Registration & Serial Booking"
-                subtitle="Phone-first search, automatic First-Visit-Only billing, and instant dual-copy token generation"
+                subtitle="Phone-first search, doctor consultation billing, and instant dual-copy token generation"
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -203,13 +191,14 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                     <Card
                         title="Book Patient Serial"
                         subtitle="Single transaction records user, queue serial, payment, and auto-resolves follow-ups"
+                        className="relative z-30"
                     >
                         <form onSubmit={handleSubmit} className="space-y-5">
                             {/* Phone-First Search Input with Live Dropdown */}
                             <div ref={searchContainerRef} className="relative">
                                 <div className="flex items-center justify-between mb-1.5">
                                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                                        Patient Phone Number (Live Auto-Search)
+                                        Patient Phone Number or Code (Live Auto-Search) <span className="text-red-500">*</span>
                                     </label>
                                     {patientStatus?.exists && (
                                         <button
@@ -222,7 +211,7 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                     )}
                                 </div>
                                 <TextInput
-                                    placeholder="Type number (e.g. 018...) to search returning patients"
+                                    placeholder="Type phone (e.g. 018...) or patient code (e.g. PT-0001)..."
                                     icon={Phone}
                                     value={data.phone}
                                     onChange={(e) => handlePhoneInputChange(e.target.value)}
@@ -234,18 +223,18 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                     error={errors.phone}
                                     required
                                     autoComplete="off"
-                                    helperText="Type 018... to instantly view matching numbers"
+                                    helperText="Search instantly by phone number or patient ID code (e.g. PT-0001)"
                                 />
 
                                 {searchingPhone && (
                                     <p className="text-xs text-teal-600 font-semibold mt-1 flex items-center gap-1 animate-pulse">
-                                        <Search className="w-3.5 h-3.5" /> Searching matching numbers...
+                                        <Search className="w-3.5 h-3.5" /> Searching matching patients...
                                     </p>
                                 )}
 
                                 {/* Live Autocomplete Suggestions Dropdown */}
                                 {showDropdown && suggestions.length > 0 && (
-                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 max-h-64 overflow-y-auto z-40">
+                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 max-h-64 overflow-y-auto z-50">
                                         <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
                                             <span>Matching Registered Patients ({suggestions.length})</span>
                                             <span className="text-teal-600 font-normal">Click to select</span>
@@ -261,6 +250,11 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                             >
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
+                                                        {p.user_code && (
+                                                            <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 font-mono font-bold text-xs border border-teal-200 shrink-0">
+                                                                {p.user_code}
+                                                            </span>
+                                                        )}
                                                         <span className="font-mono font-bold text-sm text-slate-900 group-hover:text-teal-700">
                                                             {p.phone}
                                                         </span>
@@ -277,11 +271,11 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                                 </div>
                                                 <div className="shrink-0 flex items-center gap-2">
                                                     {p.has_prior_visits ? (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                            Free Visit
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                                                            Returning
                                                         </span>
                                                     ) : (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-teal-50 text-teal-700 border border-teal-200">
                                                             Registered
                                                         </span>
                                                     )}
@@ -295,8 +289,8 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                 )}
 
                                 {showDropdown && suggestions.length === 0 && data.phone.trim().length >= 3 && !searchingPhone && (
-                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 p-3 text-center text-xs text-slate-500 z-40">
-                                        No registered patients found starting with <strong className="text-slate-800 font-mono">"{data.phone}"</strong>. Enter patient name below to register as a <strong>New Patient</strong>.
+                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 p-3 text-center text-xs text-slate-500 z-50">
+                                        No registered patients found matching <strong className="text-slate-800 font-mono">"{data.phone}"</strong>. Enter patient name below to register as a <strong>New Patient</strong>.
                                     </div>
                                 )}
                             </div>
@@ -308,11 +302,18 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                         <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs space-y-1">
                                             <div className="flex items-center gap-1.5 font-bold text-teal-800">
                                                 <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                                                <span>Existing Patient Verified: {patientStatus.patient.name}</span>
+                                                <span>
+                                                    Existing Patient Verified: {patientStatus.patient.name}{' '}
+                                                    {patientStatus.patient.user_code && (
+                                                        <span className="font-mono text-teal-700 font-normal">
+                                                            [{patientStatus.patient.user_code}]
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </div>
                                             {patientStatus.has_prior_visits ? (
                                                 <p className="text-teal-700">
-                                                    ✓ First Visit Policy Applied: Prior visits found on record. Visit consultation fee is set to <strong>0.00 Tk (Free Visit)</strong>.
+                                                    Returning patient verified. Doctor consultation fee loaded.
                                                 </p>
                                             ) : (
                                                 <p className="text-teal-700">
@@ -381,14 +382,14 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                 />
                             </div>
 
-                            {/* Billing & First-Visit-Only Discount Controls */}
+                            {/* Billing & Consultation Fee Controls */}
                             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                                         Consultation Fee Calculation
                                     </span>
                                     {patientStatus?.has_prior_visits && (
-                                        <Badge variant="completed">Follow-up / Returning (0 Fee)</Badge>
+                                        <Badge variant="info">Returning Patient</Badge>
                                     )}
                                 </div>
 
@@ -399,17 +400,29 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                         step="0.01"
                                         value={data.base_amount}
                                         onChange={(e) => {
-                                            setData('base_amount', e.target.value);
-                                            recalculateFee(data.doctor_id, data.discount_type, data.discount_amount, false);
+                                            const newBase = e.target.value;
+                                            setData((prev) => {
+                                                const base = parseFloat(newBase) || 0;
+                                                const disc = parseFloat(prev.discount_amount) || 0;
+                                                let finalAmt = base;
+                                                if (prev.discount_type === 'percentage') {
+                                                    finalAmt = Math.max(0, base - (base * disc) / 100);
+                                                } else if (prev.discount_type === 'fixed') {
+                                                    finalAmt = Math.max(0, base - disc);
+                                                }
+                                                return {
+                                                    ...prev,
+                                                    base_amount: newBase,
+                                                    final_paid_amount: finalAmt.toFixed(2),
+                                                };
+                                            });
                                         }}
-                                        disabled={patientStatus?.has_prior_visits}
                                     />
 
                                     <SelectInput
                                         label="Discount Type"
                                         value={data.discount_type}
                                         onChange={(e) => handleDiscountTypeChange(e.target.value)}
-                                        disabled={patientStatus?.has_prior_visits}
                                     >
                                         <option value="">No Discount</option>
                                         <option value="fixed">Fixed (Tk)</option>
@@ -422,7 +435,7 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                         step="0.01"
                                         value={data.discount_amount}
                                         onChange={(e) => handleDiscountAmountChange(e.target.value)}
-                                        disabled={!data.discount_type || patientStatus?.has_prior_visits}
+                                        disabled={!data.discount_type}
                                     />
                                 </div>
 

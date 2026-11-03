@@ -19,6 +19,7 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'user_code',
         'name',
         'phone',
         'role',
@@ -96,5 +97,38 @@ class User extends Authenticatable
     public function isPatient(): bool
     {
         return $this->role === 'patient';
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            if ($user->role === 'patient' && empty($user->user_code)) {
+                $user->user_code = static::generatePatientCode();
+            }
+        });
+    }
+
+    public static function generatePatientCode(): string
+    {
+        $highest = static::where('role', 'patient')
+            ->whereNotNull('user_code')
+            ->get(['user_code'])
+            ->map(function ($u) {
+                if (preg_match('/^PT-(\d+)$/', (string) $u->user_code, $matches)) {
+                    return (int) $matches[1];
+                }
+                return 0;
+            })
+            ->max() ?? 0;
+
+        $nextNum = max($highest + 1, (static::where('role', 'patient')->count() + 1));
+        $candidate = 'PT-' . str_pad((string) $nextNum, 4, '0', STR_PAD_LEFT);
+
+        while (static::where('user_code', $candidate)->exists()) {
+            $nextNum++;
+            $candidate = 'PT-' . str_pad((string) $nextNum, 4, '0', STR_PAD_LEFT);
+        }
+
+        return $candidate;
     }
 }

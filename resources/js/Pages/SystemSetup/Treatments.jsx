@@ -38,6 +38,7 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
         name: '',
         price: '2500.00',
         ordering: 0,
+        color: '',
         is_active: true,
     });
 
@@ -94,6 +95,7 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
             name: '',
             price: '2500.00',
             ordering: 0,
+            color: '',
             is_active: true,
         });
         setIsTreatmentModalOpen(true);
@@ -107,6 +109,7 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
             name: treatment.name,
             price: treatment.price,
             ordering: treatment.ordering,
+            color: treatment.color || '',
             is_active: Boolean(treatment.is_active),
         });
         setIsTreatmentModalOpen(true);
@@ -210,12 +213,24 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
                             </Thead>
                             <Tbody>
                                 {treatments.map((t) => (
-                                    <Tr key={t.id}>
-                                        <Td>
+                                    <Tr
+                                        key={t.id}
+                                        style={t.color ? { backgroundColor: `${t.color}10`, borderLeft: `4px solid ${t.color}` } : undefined}
+                                    >
+                                        <Td style={t.color ? { borderLeft: `4px solid ${t.color}` } : undefined}>
                                             <span className="font-mono text-xs text-slate-400">#{t.ordering}</span>
                                         </Td>
                                         <Td>
-                                            <span className="font-bold text-slate-900">{t.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                {t.color && (
+                                                    <span
+                                                        className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-300 shadow-2xs"
+                                                        style={{ backgroundColor: t.color }}
+                                                        title={`Color: ${t.color}`}
+                                                    />
+                                                )}
+                                                <span className="font-bold text-slate-900">{t.name}</span>
+                                            </div>
                                         </Td>
                                         <Td>
                                             <Badge variant="treatment">
@@ -465,6 +480,66 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
                             onChange={(e) => treatmentForm.setData('ordering', parseInt(e.target.value) || 0)}
                             error={treatmentForm.errors.ordering}
                         />
+                    </div>
+
+                    {/* Treatment Row Color (Hex Code) */}
+                    <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                            Treatment Color (Hex Code)
+                        </label>
+                        <div className="flex items-center gap-2.5">
+                            <input
+                                type="color"
+                                value={treatmentForm.data.color || '#3B82F6'}
+                                onChange={(e) => treatmentForm.setData('color', e.target.value)}
+                                className="w-10 h-10 p-0.5 rounded-lg border border-slate-300 cursor-pointer bg-white shadow-xs shrink-0"
+                            />
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    placeholder="#3B82F6"
+                                    value={treatmentForm.data.color || ''}
+                                    onChange={(e) => treatmentForm.setData('color', e.target.value)}
+                                    className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 uppercase"
+                                />
+                            </div>
+                            {treatmentForm.data.color && (
+                                <button
+                                    type="button"
+                                    onClick={() => treatmentForm.setData('color', '')}
+                                    className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer px-1"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        {/* Quick Presets */}
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <span className="text-[11px] text-slate-400 mr-1">Presets:</span>
+                            {[
+                                { hex: '#3B82F6', label: 'Blue' },
+                                { hex: '#10B981', label: 'Emerald' },
+                                { hex: '#8B5CF6', label: 'Purple' },
+                                { hex: '#F59E0B', label: 'Amber' },
+                                { hex: '#EC4899', label: 'Pink' },
+                                { hex: '#06B6D4', label: 'Cyan' },
+                                { hex: '#EF4444', label: 'Rose' },
+                                { hex: '#6366F1', label: 'Indigo' },
+                                { hex: '#14B8A6', label: 'Teal' },
+                            ].map((c) => (
+                                <button
+                                    key={c.hex}
+                                    type="button"
+                                    title={c.label}
+                                    onClick={() => treatmentForm.setData('color', c.hex)}
+                                    className="w-5 h-5 rounded-full border border-slate-200 transition-transform hover:scale-125 cursor-pointer shadow-2xs"
+                                    style={{ backgroundColor: c.hex }}
+                                />
+                            ))}
+                        </div>
+                        {treatmentForm.errors.color && (
+                            <p className="text-xs text-rose-500 mt-1">{treatmentForm.errors.color}</p>
+                        )}
                     </div>
 
                     <Toggle

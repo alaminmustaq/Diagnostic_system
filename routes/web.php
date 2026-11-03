@@ -3,6 +3,7 @@
 use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Consultation\Controllers\ConsultationController;
 use App\Modules\Dashboard\Controllers\DashboardController;
+use App\Modules\Finance\Controllers\BankAccountController;
 use App\Modules\FollowUpNotification\Controllers\FollowUpController;
 use App\Modules\PosTreatment\Controllers\PosTreatmentController;
 use App\Modules\Reports\Controllers\ReportController;
@@ -60,6 +61,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/queue', [ConsultationController::class, 'queue'])->name('queue');
         Route::get('/room', [ConsultationController::class, 'doctorRoom'])->name('room');
         Route::patch('/visits/{id}/status', [ConsultationController::class, 'updateStatus'])->name('update-status');
+        Route::patch('/treatments/{id}/status', [ConsultationController::class, 'updateTreatmentStatus'])->name('update-treatment-status');
         Route::post('/visits/{id}/prescribe-follow-up', [ConsultationController::class, 'prescribeFollowUp'])->name('prescribe-follow-up');
     });
 
@@ -79,6 +81,21 @@ Route::middleware(['auth'])->group(function () {
 
     // Module 6: Reports & Analytics
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+
+    // Module 7: Finance
+    Route::prefix('finance')->name('finance.')->group(function () {
+        // Bank Setup
+        Route::get('/banks', [BankAccountController::class, 'bankIndex'])->name('banks.index');
+        Route::post('/banks', [BankAccountController::class, 'bankStore'])->name('banks.store');
+        Route::put('/banks/{id}', [BankAccountController::class, 'bankUpdate'])->name('banks.update');
+        Route::delete('/banks/{id}', [BankAccountController::class, 'destroyBank'])->name('banks.destroy');
+
+        // Mobile Banking Setup
+        Route::get('/mobile-banking', [BankAccountController::class, 'mobileBankingIndex'])->name('mobile-banking.index');
+        Route::post('/mobile-banking', [BankAccountController::class, 'mobileBankingStore'])->name('mobile-banking.store');
+        Route::put('/mobile-banking/{id}', [BankAccountController::class, 'mobileBankingUpdate'])->name('mobile-banking.update');
+        Route::delete('/mobile-banking/{id}', [BankAccountController::class, 'destroyMobileBanking'])->name('mobile-banking.destroy');
+    });
 
     // Settings
     Route::prefix('settings')->name('settings.')->group(function () {

@@ -54,6 +54,8 @@ class PosTreatmentTest extends TestCase
     public function test_can_process_treatment_pos_with_discount_and_record_ledger(): void
     {
         $today = Carbon::today()->toDateString();
+        $datePart = Carbon::parse($today)->format('dmy');
+        $expectedToken = "TRT-{$datePart}-001";
 
         $response = $this->actingAs($this->admin)->post('/pos/store', [
             'phone' => '01788888888',
@@ -67,19 +69,30 @@ class PosTreatmentTest extends TestCase
         ]);
 
         $response->assertRedirect('/pos');
+        $response->assertSessionHas('last_invoice', function ($invoice) use ($expectedToken) {
+            return isset($invoice['token_number']) && $invoice['token_number'] === $expectedToken;
+        });
 
         $patient = User::where('phone', '01788888888')->first();
         $this->assertNotNull($patient);
+        $this->assertNotNull($patient->user_code);
+        $this->assertStringStartsWith('PT-', $patient->user_code);
 
-        // Assert patient_treatments created for both treatments
+        // Assert patient_treatments created for both treatments with token and waiting status
         $this->assertDatabaseHas('patient_treatments', [
             'patient_id' => $patient->id,
             'treatment_id' => $this->treatment1->id,
+            'token_number' => $expectedToken,
+            'serial_number' => 1,
+            'status' => 'waiting',
             'date_administered' => $today,
         ]);
         $this->assertDatabaseHas('patient_treatments', [
             'patient_id' => $patient->id,
             'treatment_id' => $this->treatment2->id,
+            'token_number' => $expectedToken,
+            'serial_number' => 1,
+            'status' => 'waiting',
             'date_administered' => $today,
         ]);
 
@@ -92,6 +105,22 @@ class PosTreatmentTest extends TestCase
             'discount_amount' => '500.00',
             'final_paid_amount' => '4500.00',
             'payment_date' => $today,
+        ]);
+
+        // Second patient booking should increment token serial to 002
+        $this->actingAs($this->admin)->post('/pos/store', [
+            'phone' => '01799999999',
+            'name' => 'Second Patient',
+            'treatment_ids' => [$this->treatment1->id],
+            'base_amount' => '3000.00',
+            'final_paid_amount' => '3000.00',
+            'payment_date' => $today,
+        ]);
+
+        $this->assertDatabaseHas('patient_treatments', [
+            'serial_number' => 2,
+            'token_number' => "TRT-{$datePart}-002",
+            'status' => 'waiting',
         ]);
     }
 }

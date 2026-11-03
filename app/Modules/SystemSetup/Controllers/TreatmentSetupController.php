@@ -89,6 +89,7 @@ class TreatmentSetupController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
             'ordering' => ['nullable', 'integer', 'min:0'],
+            'color' => ['nullable', 'string', 'max:20'],
             'is_active' => ['boolean'],
         ]);
 
@@ -98,6 +99,7 @@ class TreatmentSetupController extends Controller
             'name' => $validated['name'],
             'price' => $validated['price'],
             'ordering' => $validated['ordering'] ?? 0,
+            'color' => $validated['color'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
 
@@ -114,6 +116,7 @@ class TreatmentSetupController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
             'ordering' => ['nullable', 'integer', 'min:0'],
+            'color' => ['nullable', 'string', 'max:20'],
             'is_active' => ['boolean'],
         ]);
 
@@ -123,6 +126,7 @@ class TreatmentSetupController extends Controller
             'name' => $validated['name'],
             'price' => $validated['price'],
             'ordering' => $validated['ordering'] ?? 0,
+            'color' => $validated['color'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
 

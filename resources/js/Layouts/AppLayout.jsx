@@ -20,6 +20,9 @@ import {
     Settings as SettingsIcon,
     Sliders,
     DoorOpen,
+    Wallet,
+    Landmark,
+    Smartphone,
 } from 'lucide-react';
 import Alert from '../Components/UI/Alert';
 
@@ -58,6 +61,11 @@ export default function AppLayout({ children, title }) {
         { name: 'Treatments Catalog', href: '/admin/treatments', icon: Layers },
     ];
 
+    const financeNav = [
+        { name: 'Bank', href: '/finance/banks', icon: Landmark },
+        { name: 'Mobile Banking', href: '/finance/mobile-banking', icon: Smartphone },
+    ];
+
     const settingsNav = [
         { name: 'Company Setup', href: '/settings/company', icon: Building2 },
         { name: 'Configuration', href: '/settings/configuration', icon: Sliders },
@@ -68,6 +76,9 @@ export default function AppLayout({ children, title }) {
         if (path === '/dashboard') return currentPath === '/dashboard' || currentPath === '/';
         return currentPath.startsWith(path);
     };
+
+    const isFinanceActive = typeof window !== 'undefined' && window.location.pathname.startsWith('/finance');
+    const [financeOpen, setFinanceOpen] = useState(true);
 
     const isSettingsActive = typeof window !== 'undefined' && window.location.pathname.startsWith('/settings');
     const [settingsOpen, setSettingsOpen] = useState(true);
@@ -188,6 +199,52 @@ export default function AppLayout({ children, title }) {
                                     </Link>
                                 );
                             })}
+                        </div>
+
+                        {/* Finance with Child Items */}
+                        <div className="pt-4 pb-1">
+                            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                Finance
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setFinanceOpen(!financeOpen)}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
+                                    isFinanceActive
+                                        ? 'bg-slate-800 text-white font-semibold'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Wallet className={`w-4 h-4 transition ${isFinanceActive ? 'text-teal-400' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                    <span>Finance</span>
+                                </div>
+                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${financeOpen ? 'rotate-180 text-teal-400' : 'text-slate-500'}`} />
+                            </button>
+
+                            {financeOpen && (
+                                <div className="mt-1 ml-3.5 pl-3 border-l border-slate-800 space-y-1">
+                                    {financeNav.map((item) => {
+                                        const active = isCurrentUrl(item.href);
+                                        const Icon = item.icon;
+                                        return (
+                                            <Link
+                                                key={item.name}
+                                                href={item.href}
+                                                onClick={() => setMobileMenuOpen(false)}
+                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
+                                                    active
+                                                        ? 'bg-teal-600 text-white font-semibold shadow-xs'
+                                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                                }`}
+                                            >
+                                                <Icon className={`w-3.5 h-3.5 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                                <span>{item.name}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         {/* Settings with Child Items */}

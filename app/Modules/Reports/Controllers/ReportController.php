@@ -22,7 +22,7 @@ class ReportController extends Controller
 
         $doctors = User::with('doctorProfile')->where('role', 'doctor')->get();
         $treatmentsList = Treatment::orderBy('name')->get();
-        $patients = User::where('role', 'patient')->orderBy('name')->take(100)->get();
+        $patients = User::where('role', 'patient')->select('id', 'name', 'phone')->orderBy('name')->get();
 
         $startDate = $request->input('start_date', Carbon::today()->subDays(30)->toDateString());
         $endDate = $request->input('end_date', Carbon::today()->toDateString());
@@ -60,6 +60,10 @@ class ReportController extends Controller
 
         if ($request->filled('doctor_id')) {
             $query->where('doctor_id', $request->integer('doctor_id'));
+        }
+
+        if ($request->filled('patient_id')) {
+            $query->where('patient_id', $request->integer('patient_id'));
         }
 
         if ($request->filled('status')) {
@@ -117,7 +121,7 @@ class ReportController extends Controller
 
     private function getTreatmentReport(Request $request, string $startDate, string $endDate): array
     {
-        $query = PatientTreatment::with(['patient', 'treatment.category'])
+        $query = PatientTreatment::with(['patient', 'treatment.category', 'treatment.room'])
             ->whereBetween('date_administered', [$startDate, $endDate]);
 
         if ($request->filled('treatment_id')) {

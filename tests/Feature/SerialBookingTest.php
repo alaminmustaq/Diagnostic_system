@@ -86,6 +86,19 @@ class SerialBookingTest extends TestCase
             'phone' => '01711111111',
             'has_prior_visits' => true,
         ]);
+
+        // Code match test: searching by user_code (e.g. PT-0001) returns exact match
+        $code = $existing->fresh()->user_code;
+        $this->assertNotNull($code);
+        $res4 = $this->actingAs($this->admin)->getJson('/booking/search-patient?phone=' . $code);
+        $res4->assertStatus(200);
+        $res4->assertJson([
+            'exists' => true,
+            'patient' => [
+                'user_code' => $code,
+                'phone' => '01711111111',
+            ],
+        ]);
     }
 
     public function test_booking_new_patient_charges_fee_generates_token_and_records_payment(): void
@@ -105,10 +118,12 @@ class SerialBookingTest extends TestCase
 
         $response->assertRedirect('/booking');
 
-        // Assert patient created
+        // Assert patient created with user_code
         $patient = User::where('phone', '01755555555')->first();
         $this->assertNotNull($patient);
         $this->assertEquals('patient', $patient->role);
+        $this->assertNotNull($patient->user_code);
+        $this->assertStringStartsWith('PT-', $patient->user_code);
 
         // Assert Visit created with serial 1
         $visit = Visit::where('patient_id', $patient->id)->first();
@@ -160,20 +175,27 @@ class SerialBookingTest extends TestCase
 
         $this->assertEquals('pending', $followUp->fresh()->status);
 
-        // Patient walks in early and reception books a new serial (Free Visit: 0 fee)
+        // Patient walks in early and reception books a new serial with consultation fee
         $this->actingAs($this->admin)->post('/booking/store', [
             'phone' => '01766666666',
             'name' => 'Early Returning Patient',
             'doctor_id' => $this->doctor->id,
             'visit_date' => Carbon::today()->toDateString(),
-            'base_amount' => '0.00',
+            'base_amount' => '1000.00',
             'discount_type' => null,
             'discount_amount' => '0.00',
-            'final_paid_amount' => '0.00',
+            'final_paid_amount' => '1000.00',
         ]);
 
         // Verify that the pending follow-up was automatically resolved to completed!
         $this->assertEquals('completed', $followUp->fresh()->status);
+
+        // Verify payment was recorded for returning patient
+        $this->assertDatabaseHas('payments', [
+            'patient_id' => $patient->id,
+            'payment_type' => 'visit',
+            'final_paid_amount' => '1000.00',
+        ]);
     }
 }
 

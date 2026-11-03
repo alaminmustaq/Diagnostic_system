@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/UI/PageHeader';
@@ -6,6 +6,8 @@ import Card from '../../Components/UI/Card';
 import StatCard from '../../Components/UI/StatCard';
 import Button from '../../Components/UI/Button';
 import Badge from '../../Components/UI/Badge';
+import SelectInput from '../../Components/Form/SelectInput';
+import InputLabel from '../../Components/Form/InputLabel';
 import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../../Components/Table';
 import {
     BarChart3,
@@ -19,6 +21,7 @@ import {
     DollarSign,
     CheckCircle2,
     TrendingUp,
+    DoorOpen,
 } from 'lucide-react';
 
 export default function Reports({
@@ -29,17 +32,40 @@ export default function Reports({
     patients = [],
     filters = {},
 }) {
+    const [filterValues, setFilterValues] = useState({
+        start_date: filters.start_date || '',
+        end_date: filters.end_date || '',
+        doctor_id: filters.doctor_id ? String(filters.doctor_id) : '',
+        treatment_id: filters.treatment_id ? String(filters.treatment_id) : '',
+        payment_type: filters.payment_type || '',
+        patient_id: filters.patient_id ? String(filters.patient_id) : '',
+    });
+
+    useEffect(() => {
+        setFilterValues({
+            start_date: filters.start_date || '',
+            end_date: filters.end_date || '',
+            doctor_id: filters.doctor_id ? String(filters.doctor_id) : '',
+            treatment_id: filters.treatment_id ? String(filters.treatment_id) : '',
+            payment_type: filters.payment_type || '',
+            patient_id: filters.patient_id ? String(filters.patient_id) : '',
+        });
+    }, [filters]);
+
     const handleTabChange = (tabName) => {
         router.get('/reports', { ...filters, tab: tabName }, { preserveState: true });
     };
 
     const handleFilterSubmit = (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
         const params = { tab: activeTab };
-        for (let [key, val] of formData.entries()) {
-            if (val) params[key] = val;
-        }
+        if (filterValues.start_date) params.start_date = filterValues.start_date;
+        if (filterValues.end_date) params.end_date = filterValues.end_date;
+        if (filterValues.doctor_id) params.doctor_id = filterValues.doctor_id;
+        if (filterValues.treatment_id) params.treatment_id = filterValues.treatment_id;
+        if (filterValues.payment_type) params.payment_type = filterValues.payment_type;
+        if (filterValues.patient_id) params.patient_id = filterValues.patient_id;
+
         router.get('/reports', params, { preserveState: true });
     };
 
@@ -109,88 +135,105 @@ export default function Reports({
 
             {/* Filter Controls Form (Hidden on print) */}
             <Card className="no-print mb-6">
-                <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                            From Date
-                        </label>
+                        <InputLabel value="From Date" />
                         <input
                             type="date"
                             name="start_date"
-                            defaultValue={filters.start_date || ''}
-                            className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            value={filterValues.start_date}
+                            onChange={(e) => setFilterValues((prev) => ({ ...prev, start_date: e.target.value }))}
+                            className="mt-1 w-full text-sm bg-white border border-slate-300 rounded-lg py-2.5 px-3.5 focus:outline-none focus:border-teal-500 focus:ring-3 focus:ring-teal-500/20 text-slate-900 shadow-2xs"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                            To Date
-                        </label>
+                        <InputLabel value="To Date" />
                         <input
                             type="date"
                             name="end_date"
-                            defaultValue={filters.end_date || ''}
-                            className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            value={filterValues.end_date}
+                            onChange={(e) => setFilterValues((prev) => ({ ...prev, end_date: e.target.value }))}
+                            className="mt-1 w-full text-sm bg-white border border-slate-300 rounded-lg py-2.5 px-3.5 focus:outline-none focus:border-teal-500 focus:ring-3 focus:ring-teal-500/20 text-slate-900 shadow-2xs"
                         />
                     </div>
 
                     {/* Dynamic Filters depending on tab */}
                     {(activeTab === 'visits' || activeTab === 'followups') && (
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                                Doctor
-                            </label>
-                            <select
-                                name="doctor_id"
-                                defaultValue={filters.doctor_id || ''}
-                                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            >
-                                <option value="">All Doctors</option>
-                                {doctors.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                        {d.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <SelectInput
+                            label="Doctor"
+                            name="doctor_id"
+                            placeholder="All Doctors"
+                            value={filterValues.doctor_id}
+                            onChange={(e) => setFilterValues((prev) => ({ ...prev, doctor_id: e.target.value }))}
+                            searchable={true}
+                        >
+                            {doctors.map((d) => (
+                                <option
+                                    key={d.id}
+                                    value={d.id}
+                                    data-description={d.doctor_profile?.designation || ''}
+                                >
+                                    {d.name}
+                                </option>
+                            ))}
+                        </SelectInput>
                     )}
 
                     {activeTab === 'treatments' && (
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                                Specific Treatment
-                            </label>
-                            <select
-                                name="treatment_id"
-                                defaultValue={filters.treatment_id || ''}
-                                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            >
-                                <option value="">All Services</option>
-                                {treatmentsList.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <SelectInput
+                            label="Specific Treatment"
+                            name="treatment_id"
+                            placeholder="All Services"
+                            value={filterValues.treatment_id}
+                            onChange={(e) => setFilterValues((prev) => ({ ...prev, treatment_id: e.target.value }))}
+                            searchable={true}
+                        >
+                            {treatmentsList.map((t) => (
+                                <option
+                                    key={t.id}
+                                    value={t.id}
+                                    data-description={t.price ? `${parseFloat(t.price).toFixed(2)} Tk` : ''}
+                                >
+                                    {t.name}
+                                </option>
+                            ))}
+                        </SelectInput>
                     )}
 
                     {activeTab === 'payments' && (
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                                Payment Category
-                            </label>
-                            <select
-                                name="payment_type"
-                                defaultValue={filters.payment_type || ''}
-                                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            >
-                                <option value="">All Revenue Streams</option>
-                                <option value="visit">Visit Fees (Consultation)</option>
-                                <option value="treatment">Treatment Fees (Hospital POS)</option>
-                            </select>
-                        </div>
+                        <SelectInput
+                            label="Payment Category"
+                            name="payment_type"
+                            placeholder="All Revenue Streams"
+                            value={filterValues.payment_type}
+                            onChange={(e) => setFilterValues((prev) => ({ ...prev, payment_type: e.target.value }))}
+                            searchable={false}
+                        >
+                            <option value="visit">Doctor Consultation (Visits)</option>
+                            <option value="treatment">Hospital Treatment (POS)</option>
+                        </SelectInput>
                     )}
+
+                    {/* Patient Filter with Search */}
+                    <SelectInput
+                        label="Patient"
+                        name="patient_id"
+                        placeholder="All Patients"
+                        value={filterValues.patient_id}
+                        onChange={(e) => setFilterValues((prev) => ({ ...prev, patient_id: e.target.value }))}
+                        searchable={true}
+                    >
+                        {patients.map((p) => (
+                            <option
+                                key={p.id}
+                                value={p.id}
+                                data-description={p.phone || ''}
+                            >
+                                {p.name}
+                            </option>
+                        ))}
+                    </SelectInput>
 
                     <div>
                         <Button type="submit" variant="primary" size="md" className="w-full font-bold">
@@ -259,7 +302,12 @@ export default function Reports({
                                                 </span>
                                             </Td>
                                             <Td>#{v.serial_number}</Td>
-                                            <Td className="font-bold">{v.patient?.name}</Td>
+                                            <Td>
+                                                <span className="font-bold text-slate-900 block">{v.patient?.name}</span>
+                                                {v.patient?.phone && (
+                                                    <span className="font-mono text-[11px] text-slate-400">{v.patient.phone}</span>
+                                                )}
+                                            </Td>
                                             <Td>{v.doctor?.name}</Td>
                                             <Td>
                                                 <Badge variant={v.status}>{v.status.toUpperCase()}</Badge>
@@ -375,39 +423,77 @@ export default function Reports({
                         />
                     </div>
 
-                    {/* Popular Services Breakdown */}
-                    <Card title="Top Clinical Services Rendered (Popularity & Volume)">
-                        {reportData.breakdown?.length === 0 ? (
-                            <EmptyState title="No treatments recorded in this period" />
+                    {/* Patient Treatments Ledger */}
+                    <Card title="Patient Treatments Administered">
+                        {reportData.records?.length === 0 ? (
+                            <EmptyState title="No treatments recorded for this period" />
                         ) : (
                             <Table>
                                 <Thead>
                                     <Tr>
-                                        <Th>Rank</Th>
-                                        <Th>Procedure / Treatment</Th>
+                                        <Th>Date</Th>
+                                        <Th>Patient Name</Th>
+                                        <Th>Contact / Phone</Th>
+                                        <Th>Treatment / Procedure</Th>
                                         <Th>Category</Th>
-                                        <Th align="center">Times Administered</Th>
-                                        <Th align="right">Estimated Volume (Tk)</Th>
+                                        <Th>Room</Th>
+                                        <Th align="right">Charge / Price (Tk)</Th>
                                     </Tr>
                                 </Thead>
                                 <Tbody>
-                                    {reportData.breakdown.map((item, idx) => (
-                                        <Tr key={idx}>
-                                            <Td className="font-mono font-bold text-slate-400">#{idx + 1}</Td>
-                                            <Td className="font-bold text-slate-900">{item.treatment_name}</Td>
-                                            <Td>
-                                                <Badge variant="treatment">{item.category}</Badge>
-                                            </Td>
-                                            <Td align="center">
-                                                <span className="px-2.5 py-1 rounded-full bg-slate-100 font-bold text-xs text-slate-800">
-                                                    {item.count} sessions
-                                                </span>
-                                            </Td>
-                                            <Td align="right" className="font-mono font-bold text-teal-700">
-                                                {parseFloat(item.estimated_revenue).toFixed(2)} Tk
-                                            </Td>
-                                        </Tr>
-                                    ))}
+                                    {reportData.records.map((pt) => {
+                                        const rowColor = pt.treatment?.color;
+                                        return (
+                                            <Tr
+                                                key={pt.id}
+                                                style={rowColor ? { backgroundColor: `${rowColor}10`, borderLeft: `4px solid ${rowColor}` } : undefined}
+                                            >
+                                                <Td
+                                                    className="font-mono text-xs text-slate-600"
+                                                    style={rowColor ? { borderLeft: `4px solid ${rowColor}` } : undefined}
+                                                >
+                                                    {pt.date_administered}
+                                                </Td>
+                                                <Td>
+                                                    <span className="font-bold text-slate-900 block">{pt.patient?.name || 'Walk-in Patient'}</span>
+                                                    <span className="text-[11px] text-slate-400">ID: {pt.patient?.user_code || `PT-${pt.patient_id}`}</span>
+                                                </Td>
+                                                <Td>
+                                                    <span className="font-mono text-xs text-slate-700">{pt.patient?.phone || '—'}</span>
+                                                </Td>
+                                                <Td>
+                                                    <div className="flex items-center gap-2">
+                                                        {rowColor && (
+                                                            <span
+                                                                className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-300 shadow-2xs"
+                                                                style={{ backgroundColor: rowColor }}
+                                                                title={`Color: ${rowColor}`}
+                                                            />
+                                                        )}
+                                                        <span className="font-semibold text-teal-800 text-sm block">
+                                                            {pt.treatment?.name || 'Custom Procedure'}
+                                                        </span>
+                                                    </div>
+                                                </Td>
+                                                <Td>
+                                                    <Badge variant="treatment">{pt.treatment?.category?.name || 'General'}</Badge>
+                                                </Td>
+                                                <Td>
+                                                    {pt.treatment?.room ? (
+                                                        <Badge variant="info">
+                                                            <DoorOpen className="w-3 h-3 mr-1" />
+                                                            {pt.treatment.room.room_number}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">—</span>
+                                                    )}
+                                                </Td>
+                                                <Td align="right" className="font-mono font-bold text-teal-700">
+                                                    {pt.treatment?.price ? `${parseFloat(pt.treatment.price).toFixed(2)} Tk` : '0.00 Tk'}
+                                                </Td>
+                                            </Tr>
+                                        );
+                                    })}
                                 </Tbody>
                             </Table>
                         )}

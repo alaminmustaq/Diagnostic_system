@@ -4,6 +4,7 @@ namespace App\Modules\Consultation\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
+use App\Models\PatientTreatment;
 use App\Models\User;
 use App\Models\Visit;
 use Carbon\Carbon;
@@ -35,11 +36,18 @@ class ConsultationController extends Controller
 
         $doctors = User::with('doctorProfile')->where('role', 'doctor')->get();
 
+        $treatmentQueue = PatientTreatment::with(['patient', 'treatment.category', 'treatment.room'])
+            ->whereDate('date_administered', $today)
+            ->orderBy('id', 'asc')
+            ->get();
+
         return Inertia::render('Consultation/Queue', [
             'visits' => $visits,
             'doctors' => $doctors,
             'selectedDoctorId' => $selectedDoctorId,
+            'treatmentQueue' => $treatmentQueue,
             'today' => $today,
+            'activeTab' => $request->query('tab', 'visits'),
         ]);
     }
 
@@ -104,6 +112,30 @@ class ConsultationController extends Controller
         ];
 
         return redirect()->back()->with('success', "Serial #{$visit->serial_number} {$statusLabels[$validated['status']]}.");
+    }
+
+    public function updateTreatmentStatus(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:waiting,in_collection,sample'],
+        ]);
+
+        $treatment = PatientTreatment::with('treatment')->findOrFail($id);
+
+        // If it is already marked as sample, no further status changes are permitted
+        if ($treatment->status === 'sample') {
+            return redirect()->back()->with('error', 'This treatment is already marked as sample (done) and cannot be changed.');
+        }
+
+        $treatment->update(['status' => $validated['status']]);
+
+        $statusLabels = [
+            'waiting' => 'marked as Waiting',
+            'in_collection' => 'marked as In Collection',
+            'sample' => 'marked as Sample (Treatment Done)',
+        ];
+
+        return redirect()->back()->with('success', "Treatment token {$treatment->token_number} {$statusLabels[$validated['status']]}.");
     }
 
     public function prescribeFollowUp(Request $request, int $id): RedirectResponse

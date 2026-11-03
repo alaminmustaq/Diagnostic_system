@@ -17,6 +17,10 @@ class PatientTreatment extends Model
     protected $fillable = [
         'patient_id',
         'treatment_id',
+        'payment_id',
+        'serial_number',
+        'token_number',
+        'status',
         'date_administered',
     ];
 
@@ -26,6 +30,8 @@ class PatientTreatment extends Model
     protected function casts(): array
     {
         return [
+            'payment_id' => 'integer',
+            'serial_number' => 'integer',
             'date_administered' => 'date:Y-m-d',
         ];
     }
@@ -38,6 +44,11 @@ class PatientTreatment extends Model
     public function treatment(): BelongsTo
     {
         return $this->belongsTo(Treatment::class, 'treatment_id');
+    }
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class, 'payment_id');
     }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/UI/PageHeader';
@@ -28,6 +28,10 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
     const [selectedTreatments, setSelectedTreatments] = useState([]);
     const [activeInvoice, setActiveInvoice] = useState(lastInvoice || null);
     const [searchingPhone, setSearchingPhone] = useState(false);
+    const [patientStatus, setPatientStatus] = useState(null);
+    const [suggestions, setSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const searchContainerRef = useRef(null);
 
     const { data, setData, post, processing, errors, reset } = useForm({
         phone: '',
@@ -45,6 +49,17 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
             setActiveInvoice(lastInvoice);
         }
     }, [lastInvoice]);
+
+    // Click-outside listener to close suggestions dropdown
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Update form when treatments selection changes
     useEffect(() => {
@@ -68,26 +83,70 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
         }));
     }, [selectedTreatments, data.discount_type, data.discount_amount]);
 
-    // Patient Phone Search
-    const handlePhoneLookup = async (phoneVal) => {
+    // Live search as user types
+    const handlePhoneInputChange = (phoneVal) => {
+        setData('phone', phoneVal);
         const clean = phoneVal.trim();
-        if (clean.length < 5) return;
 
+        if (clean.length >= 2) {
+            handleLiveSearch(clean);
+        } else {
+            setSuggestions([]);
+            setShowDropdown(false);
+            setPatientStatus(null);
+        }
+    };
+
+    const handleLiveSearch = async (cleanPhone) => {
         setSearchingPhone(true);
         try {
-            const res = await fetch(`/booking/search-patient?phone=${encodeURIComponent(clean)}`);
+            const res = await fetch(`/booking/search-patient?phone=${encodeURIComponent(cleanPhone)}`);
             const result = await res.json();
+            const matches = result.matches || [];
+            setSuggestions(matches);
+            setShowDropdown(true);
+
             if (result.exists && result.patient) {
+                setPatientStatus(result);
                 setData((prev) => ({
                     ...prev,
+                    phone: result.patient.phone || prev.phone,
                     name: result.patient.name,
                 }));
+            } else if (cleanPhone.length >= 11 && matches.length === 0) {
+                setPatientStatus({ exists: false, has_prior_visits: false, pending_follow_up: null });
             }
         } catch (err) {
-            console.error('Error looking up patient:', err);
+            console.error('Error searching patient:', err);
         } finally {
             setSearchingPhone(false);
         }
+    };
+
+    const selectPatient = (patient) => {
+        setData((prev) => ({
+            ...prev,
+            phone: patient.phone,
+            name: patient.name,
+        }));
+        setPatientStatus({
+            exists: true,
+            patient: { id: patient.id, user_code: patient.user_code, name: patient.name, phone: patient.phone },
+            has_prior_visits: patient.has_prior_visits,
+            pending_follow_up: patient.pending_follow_up,
+        });
+        setShowDropdown(false);
+    };
+
+    const clearPatientSelection = () => {
+        setData((prev) => ({
+            ...prev,
+            phone: '',
+            name: '',
+        }));
+        setPatientStatus(null);
+        setSuggestions([]);
+        setShowDropdown(false);
     };
 
     const addTreatmentToCart = (treatment) => {
@@ -109,6 +168,9 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
             onSuccess: () => {
                 reset('phone', 'name', 'discount_type', 'discount_amount');
                 setSelectedTreatments([]);
+                setPatientStatus(null);
+                setSuggestions([]);
+                setShowDropdown(false);
             },
         });
     };
@@ -124,40 +186,144 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
                 {/* Treatment Catalog & Selector (Left 7 Cols) */}
                 <div className="lg:col-span-7 space-y-6">
                     {/* Patient Information Card */}
-                    <Card title="Patient Details" subtitle="Phone lookup auto-completes registered patients">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
+                    <Card
+                        title="Patient Details"
+                        subtitle="Phone lookup auto-completes registered patients"
+                        className="relative z-30"
+                    >
+                        <div className="space-y-4">
+                            {/* Phone-First Search Input with Live Dropdown */}
+                            <div ref={searchContainerRef} className="relative">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                                        Patient Phone Number or Code (Live Auto-Search) <span className="text-red-500">*</span>
+                                    </label>
+                                    {patientStatus?.exists && (
+                                        <button
+                                            type="button"
+                                            onClick={clearPatientSelection}
+                                            className="text-xs text-teal-600 hover:text-teal-700 font-semibold underline cursor-pointer"
+                                        >
+                                            Clear / Search Again
+                                        </button>
+                                    )}
+                                </div>
                                 <TextInput
-                                    label="Patient Phone"
+                                    placeholder="Type phone (e.g. 018...) or patient code (e.g. PT-0001)..."
                                     icon={Phone}
-                                    placeholder="e.g. 01711111111"
                                     value={data.phone}
-                                    onChange={(e) => {
-                                        setData('phone', e.target.value);
-                                        if (e.target.value.length >= 10) {
-                                            handlePhoneLookup(e.target.value);
+                                    onChange={(e) => handlePhoneInputChange(e.target.value)}
+                                    onFocus={() => {
+                                        if (data.phone.trim().length >= 2 && suggestions.length > 0) {
+                                            setShowDropdown(true);
                                         }
                                     }}
-                                    onBlur={(e) => handlePhoneLookup(e.target.value)}
                                     error={errors.phone}
                                     required
+                                    autoComplete="off"
+                                    helperText="Search instantly by phone number or patient ID code (e.g. PT-0001)"
                                 />
+
                                 {searchingPhone && (
-                                    <p className="text-xs text-teal-600 font-semibold mt-1 animate-pulse">
-                                        Searching patient...
+                                    <p className="text-xs text-teal-600 font-semibold mt-1 flex items-center gap-1 animate-pulse">
+                                        <Search className="w-3.5 h-3.5" /> Searching matching patients...
                                     </p>
+                                )}
+
+                                {/* Live Autocomplete Suggestions Dropdown */}
+                                {showDropdown && suggestions.length > 0 && (
+                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 max-h-64 overflow-y-auto z-50">
+                                        <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                                            <span>Matching Registered Patients ({suggestions.length})</span>
+                                            <span className="text-teal-600 font-normal">Click to select</span>
+                                        </div>
+                                        {suggestions.map((p) => (
+                                            <div
+                                                key={p.id}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    selectPatient(p);
+                                                }}
+                                                className="p-3 hover:bg-teal-50/70 transition cursor-pointer flex items-center justify-between gap-3 group"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        {p.user_code && (
+                                                            <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 font-mono font-bold text-xs border border-teal-200 shrink-0">
+                                                                {p.user_code}
+                                                            </span>
+                                                        )}
+                                                        <span className="font-mono font-bold text-sm text-slate-900 group-hover:text-teal-700">
+                                                            {p.phone}
+                                                        </span>
+                                                        <span className="font-semibold text-slate-700 text-xs truncate">
+                                                            — {p.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="shrink-0 flex items-center gap-2">
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                                                        Registered
+                                                    </span>
+                                                    <span className="text-xs text-teal-600 font-bold opacity-0 group-hover:opacity-100 transition">
+                                                        Select →
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {showDropdown && suggestions.length === 0 && data.phone.trim().length >= 3 && !searchingPhone && (
+                                    <div className="absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 p-3 text-center text-xs text-slate-500 z-50">
+                                        No registered patients found matching <strong className="text-slate-800 font-mono">"{data.phone}"</strong>. Enter patient name below to register as a <strong>New Patient</strong>.
+                                    </div>
                                 )}
                             </div>
 
-                            <TextInput
-                                label="Patient Name"
-                                icon={UserIcon}
-                                placeholder="Enter patient full name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                error={errors.name}
-                                required
-                            />
+                            {/* Patient Status Feedback Alert */}
+                            {patientStatus && (
+                                <div>
+                                    {patientStatus.exists ? (
+                                        <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs space-y-1">
+                                            <div className="flex items-center gap-1.5 font-bold text-teal-800">
+                                                <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                                                <span>
+                                                    Existing Patient Verified: {patientStatus.patient.name}{' '}
+                                                    {patientStatus.patient.user_code && (
+                                                        <span className="font-mono text-teal-700 font-normal">
+                                                            [{patientStatus.patient.user_code}]
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <p className="text-teal-700">
+                                                Registered patient verified. Phone: <span className="font-mono font-semibold">{patientStatus.patient.phone}</span>
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2">
+                                            <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+                                            <span>
+                                                New patient. Please enter their full name below.
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Patient Name */}
+                            <div>
+                                <TextInput
+                                    label="Patient Full Name"
+                                    placeholder="Enter patient full name"
+                                    icon={UserIcon}
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    error={errors.name}
+                                    required
+                                />
+                            </div>
                         </div>
                     </Card>
 

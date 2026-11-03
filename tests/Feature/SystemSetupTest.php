@@ -88,13 +88,14 @@ class SystemSetupTest extends TestCase
 
         $category = TreatmentCategory::first();
 
-        // 2. Create Treatment under Category with Room ID
+        // 2. Create Treatment under Category with Room ID and Color
         $trtResponse = $this->actingAs($this->admin)->post('/admin/treatments', [
             'category_id' => $category->id,
             'room_id' => $room->id,
             'name' => 'CO2 Fractional Laser',
             'price' => '4000.00',
             'ordering' => 1,
+            'color' => '#3B82F6',
             'is_active' => true,
         ]);
         $trtResponse->assertRedirect();
@@ -104,6 +105,27 @@ class SystemSetupTest extends TestCase
             'room_id' => $room->id,
             'name' => 'CO2 Fractional Laser',
             'price' => '4000.00',
+            'color' => '#3B82F6',
+        ]);
+
+        $treatment = Treatment::first();
+
+        // 3. Update Treatment Color
+        $updateResponse = $this->actingAs($this->admin)->put("/admin/treatments/{$treatment->id}", [
+            'category_id' => $category->id,
+            'room_id' => $room->id,
+            'name' => 'CO2 Fractional Laser Updated',
+            'price' => '4500.00',
+            'ordering' => 2,
+            'color' => '#10B981',
+            'is_active' => true,
+        ]);
+        $updateResponse->assertRedirect();
+
+        $this->assertDatabaseHas('treatments', [
+            'id' => $treatment->id,
+            'color' => '#10B981',
+            'price' => '4500.00',
         ]);
     }
 }

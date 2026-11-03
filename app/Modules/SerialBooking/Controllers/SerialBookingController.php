@@ -51,9 +51,9 @@ class SerialBookingController extends Controller
 
     public function searchPatient(Request $request): JsonResponse
     {
-        $phone = trim((string) $request->query('phone'));
+        $search = trim((string) ($request->query('phone') ?? $request->query('query') ?? $request->query('code')));
 
-        if (empty($phone)) {
+        if (empty($search)) {
             return response()->json([
                 'exists' => false,
                 'patient' => null,
@@ -63,9 +63,12 @@ class SerialBookingController extends Controller
             ]);
         }
 
-        // Live prefix search for autocomplete dropdown
+        // Live prefix or partial search for autocomplete dropdown by phone OR user_code
         $matchingUsers = User::where('role', 'patient')
-            ->where('phone', 'like', "{$phone}%")
+            ->where(function ($q) use ($search) {
+                $q->where('phone', 'like', "%{$search}%")
+                    ->orWhere('user_code', 'like', "%{$search}%");
+            })
             ->take(10)
             ->get();
 
@@ -79,6 +82,7 @@ class SerialBookingController extends Controller
 
             return [
                 'id' => $p->id,
+                'user_code' => $p->user_code,
                 'name' => $p->name,
                 'phone' => $p->phone,
                 'has_prior_visits' => $hasPriorVisits,
@@ -86,7 +90,13 @@ class SerialBookingController extends Controller
             ];
         });
 
-        $exactPatient = User::where('phone', $phone)->first();
+        // Exact match by phone OR user_code
+        $exactPatient = User::where('role', 'patient')
+            ->where(function ($q) use ($search) {
+                $q->where('phone', $search)
+                    ->orWhereRaw('LOWER(user_code) = ?', [strtolower($search)]);
+            })
+            ->first();
 
         if (! $exactPatient) {
             return response()->json([
@@ -110,6 +120,7 @@ class SerialBookingController extends Controller
             'exists' => true,
             'patient' => [
                 'id' => $exactPatient->id,
+                'user_code' => $exactPatient->user_code,
                 'name' => $exactPatient->name,
                 'phone' => $exactPatient->phone,
             ],
@@ -134,18 +145,23 @@ class SerialBookingController extends Controller
 
         $result = DB::transaction(function () use ($validated, $request) {
             // 1. Find or create patient
-            $patient = User::firstOrCreate(
-                ['phone' => $validated['phone']],
-                [
+            $patient = User::where('phone', $validated['phone'])->first();
+
+            if (! $patient) {
+                $patient = User::create([
+                    'phone' => $validated['phone'],
                     'name' => $validated['name'],
                     'role' => 'patient',
+                    'user_code' => User::generatePatientCode(),
                     'password' => null,
-                ]
-            );
-
-            // Update name if changed
-            if ($patient->name !== $validated['name']) {
-                $patient->update(['name' => $validated['name']]);
+                ]);
+            } else {
+                if ($patient->name !== $validated['name']) {
+                    $patient->update(['name' => $validated['name']]);
+                }
+                if (empty($patient->user_code)) {
+                    $patient->update(['user_code' => User::generatePatientCode()]);
+                }
             }
 
             $visitDate = $validated['visit_date'];

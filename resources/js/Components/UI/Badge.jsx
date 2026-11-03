@@ -15,7 +15,9 @@ export default function Badge({
     const variantClasses = {
         waiting: 'bg-amber-100 text-amber-800 border-amber-200',
         in_consultation: 'bg-indigo-100 text-indigo-800 border-indigo-200 animate-pulse',
+        in_collection: 'bg-indigo-100 text-indigo-800 border-indigo-200 animate-pulse',
         completed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        sample: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         cancelled: 'bg-rose-100 text-rose-800 border-rose-200',
         pending: 'bg-amber-100 text-amber-800 border-amber-200',
         visit: 'bg-teal-100 text-teal-800 border-teal-200',
@@ -29,9 +31,11 @@ export default function Badge({
     };
 
     const style = variantClasses[variant] || variantClasses.neutral;
+    const hasRounded = className.includes('rounded-');
+    const roundedClass = hasRounded ? '' : 'rounded-full';
 
     return (
-        <span className={`inline-flex items-center font-medium rounded-full border ${style} ${sizeClasses[size]} ${className}`}>
+        <span className={`inline-flex items-center font-medium border ${roundedClass} ${style} ${sizeClasses[size]} ${className}`}>
             {children}
         </span>
     );

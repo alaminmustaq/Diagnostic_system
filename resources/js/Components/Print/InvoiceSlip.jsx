@@ -138,8 +138,26 @@ export default function InvoiceSlip({ invoice, onClose }) {
                             </p>
                         </div>
 
+                        {/* Token Number Display */}
+                        {invoice.token_number && (
+                            <div className="my-2 py-1.5 px-3 bg-teal-50 border border-teal-200 rounded-lg text-center print:border-black print:bg-slate-100">
+                                <span className="text-[9px] uppercase font-bold text-teal-800 tracking-wider block print:text-black">
+                                    Queue Token Number
+                                </span>
+                                <span className="text-lg font-black font-mono text-teal-900 tracking-wider print:text-black">
+                                    {invoice.token_number}
+                                </span>
+                            </div>
+                        )}
+
                         {/* Patient & Date Meta */}
                         <div className="py-2 text-[11px] border-b border-dashed border-slate-300 space-y-1">
+                            {invoice.token_number && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Token #:</span>
+                                    <span className="font-mono font-bold text-teal-900 print:text-black">{invoice.token_number}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Date:</span>
                                 <span className="font-semibold text-slate-900">{invoice.date}</span>

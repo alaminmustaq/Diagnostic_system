@@ -21,6 +21,7 @@ class Treatment extends Model
         'name',
         'price',
         'ordering',
+        'color',
         'is_active',
     ];
 

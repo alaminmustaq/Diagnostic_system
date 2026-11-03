@@ -60,29 +60,33 @@ class PosTreatmentController extends Controller
 
         $invoice = DB::transaction(function () use ($validated, $paymentDate) {
             // 1. Patient lookup or creation
-            $patient = User::firstOrCreate(
-                ['phone' => $validated['phone']],
-                [
+            $patient = User::where('phone', $validated['phone'])->first();
+
+            if (! $patient) {
+                $patient = User::create([
+                    'phone' => $validated['phone'],
                     'name' => $validated['name'],
                     'role' => 'patient',
+                    'user_code' => User::generatePatientCode(),
                     'password' => null,
-                ]
-            );
-
-            if ($patient->name !== $validated['name']) {
-                $patient->update(['name' => $validated['name']]);
-            }
-
-            // 2. Insert into patient_treatments
-            $selectedTreatments = Treatment::whereIn('id', $validated['treatment_ids'])->get();
-
-            foreach ($selectedTreatments as $treatment) {
-                PatientTreatment::create([
-                    'patient_id' => $patient->id,
-                    'treatment_id' => $treatment->id,
-                    'date_administered' => $paymentDate,
                 ]);
+            } else {
+                if ($patient->name !== $validated['name']) {
+                    $patient->update(['name' => $validated['name']]);
+                }
+                if (empty($patient->user_code)) {
+                    $patient->update(['user_code' => User::generatePatientCode()]);
+                }
             }
+
+            // 2. Calculate daily treatment queue serial & token
+            $lastSerial = PatientTreatment::whereDate('date_administered', $paymentDate)
+                ->lockForUpdate()
+                ->max('serial_number') ?? 0;
+
+            $serialNumber = $lastSerial + 1;
+            $datePart = Carbon::parse($paymentDate)->format('dmy');
+            $tokenNumber = "TRT-{$datePart}-" . str_pad((string) $serialNumber, 3, '0', STR_PAD_LEFT);
 
             // 3. Insert into payments
             $collectorId = Auth::id() ?: User::where('role', 'admin')->value('id') ?: $patient->id;
@@ -98,18 +102,36 @@ class PosTreatmentController extends Controller
                 'payment_date' => $paymentDate,
             ]);
 
+            // 4. Insert into patient_treatments
+            $selectedTreatments = Treatment::with(['category', 'room'])->whereIn('id', $validated['treatment_ids'])->get();
+
+            foreach ($selectedTreatments as $treatment) {
+                PatientTreatment::create([
+                    'patient_id' => $patient->id,
+                    'treatment_id' => $treatment->id,
+                    'payment_id' => $payment->id,
+                    'serial_number' => $serialNumber,
+                    'token_number' => $tokenNumber,
+                    'status' => 'waiting',
+                    'date_administered' => $paymentDate,
+                ]);
+            }
+
             return [
                 'id' => $payment->id,
                 'invoice_no' => 'INV-TRT-' . str_pad((string) $payment->id, 5, '0', STR_PAD_LEFT),
+                'token_number' => $tokenNumber,
                 'date' => $paymentDate,
                 'patient' => [
                     'id' => $patient->id,
+                    'user_code' => $patient->user_code,
                     'name' => $patient->name,
                     'phone' => $patient->phone,
                 ],
                 'items' => $selectedTreatments->map(fn ($t) => [
                     'name' => $t->name,
                     'price' => $t->price,
+                    'room_number' => $t->room?->room_number,
                 ]),
                 'base_amount' => $payment->base_amount,
                 'discount_type' => $payment->discount_type,
