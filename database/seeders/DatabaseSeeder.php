@@ -6,6 +6,7 @@ use App\Models\DoctorProfile;
 use App\Models\FollowUp;
 use App\Models\PatientTreatment;
 use App\Models\Payment;
+use App\Models\Room;
 use App\Models\Treatment;
 use App\Models\TreatmentCategory;
 use App\Models\User;
@@ -34,6 +35,25 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 1.5 Rooms
+        $room102 = Room::firstOrCreate(
+            ['room_number' => 'Room 102'],
+            [
+                'description' => 'Hair Restoration & Trichology Consultation Room',
+                'status' => 'active',
+                'is_active' => true,
+            ]
+        );
+
+        $room205 = Room::firstOrCreate(
+            ['room_number' => 'Room 205'],
+            [
+                'description' => 'Dermatology & Laser Surgery Suite',
+                'status' => 'active',
+                'is_active' => true,
+            ]
+        );
+
         // 2. Doctors
         $doctorUser1 = User::firstOrCreate(
             ['phone' => '01800000000'],
@@ -47,9 +67,9 @@ class DatabaseSeeder extends Seeder
         DoctorProfile::firstOrCreate(
             ['user_id' => $doctorUser1->id],
             [
+                'room_id' => $room102->id,
                 'designation' => 'Senior Hair Specialist & Trichologist',
                 'degrees' => 'MBBS, MD (Dermatology)',
-                'room_number' => 'Room 102',
                 'professional_phone' => '01800000001',
                 'bio_summary' => 'Expert in advanced hair restoration, PRP/GFC therapies, and cosmetic dermatology.',
                 'default_visit_rate' => 1000.00,
@@ -68,9 +88,9 @@ class DatabaseSeeder extends Seeder
         DoctorProfile::firstOrCreate(
             ['user_id' => $doctorUser2->id],
             [
+                'room_id' => $room205->id,
                 'designation' => 'Consultant Dermatologist & Laser Surgeon',
                 'degrees' => 'MBBS, FCPS (Dermatology & VD)',
-                'room_number' => 'Room 205',
                 'professional_phone' => '01900000002',
                 'bio_summary' => 'Specialized in laser skin procedures, acne scar revision, and aesthetic rejuvenation.',
                 'default_visit_rate' => 1200.00,

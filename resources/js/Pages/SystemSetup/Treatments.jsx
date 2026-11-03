@@ -11,9 +11,9 @@ import ConfirmModal from '../../Components/Modal/ConfirmModal';
 import TextInput from '../../Components/Form/TextInput';
 import SelectInput from '../../Components/Form/SelectInput';
 import Toggle from '../../Components/Form/Toggle';
-import { Layers, Plus, Edit2, Trash2, FolderPlus, Sparkles, Check, X } from 'lucide-react';
+import { Layers, Plus, Edit2, Trash2, FolderPlus, Sparkles, Check, X, DoorOpen } from 'lucide-react';
 
-export default function Treatments({ categories = [], treatments = [] }) {
+export default function Treatments({ categories = [], treatments = [], rooms = [] }) {
     const [activeTab, setActiveTab] = useState('treatments'); // 'treatments' | 'categories'
 
     // Category Modal state
@@ -34,6 +34,7 @@ export default function Treatments({ categories = [], treatments = [] }) {
 
     const treatmentForm = useForm({
         category_id: categories.length > 0 ? categories[0].id : '',
+        room_id: '',
         name: '',
         price: '2500.00',
         ordering: 0,
@@ -87,9 +88,14 @@ export default function Treatments({ categories = [], treatments = [] }) {
     const openCreateTreatment = () => {
         treatmentForm.reset();
         setEditingTreatment(null);
-        if (categories.length > 0) {
-            treatmentForm.setData('category_id', categories[0].id);
-        }
+        treatmentForm.setData({
+            category_id: categories.length > 0 ? categories[0].id : '',
+            room_id: '',
+            name: '',
+            price: '2500.00',
+            ordering: 0,
+            is_active: true,
+        });
         setIsTreatmentModalOpen(true);
     };
 
@@ -97,6 +103,7 @@ export default function Treatments({ categories = [], treatments = [] }) {
         setEditingTreatment(treatment);
         treatmentForm.setData({
             category_id: treatment.category_id,
+            room_id: treatment.room_id || '',
             name: treatment.name,
             price: treatment.price,
             ordering: treatment.ordering,
@@ -195,6 +202,7 @@ export default function Treatments({ categories = [], treatments = [] }) {
                                     <Th>Order</Th>
                                     <Th>Treatment Service</Th>
                                     <Th>Category</Th>
+                                    <Th>Room</Th>
                                     <Th>Price (Tk)</Th>
                                     <Th>Status</Th>
                                     <Th align="right">Actions</Th>
@@ -213,6 +221,16 @@ export default function Treatments({ categories = [], treatments = [] }) {
                                             <Badge variant="treatment">
                                                 {t.category?.name || 'Unassigned'}
                                             </Badge>
+                                        </Td>
+                                        <Td>
+                                            {t.room ? (
+                                                <Badge variant="info">
+                                                    <DoorOpen className="w-3 h-3 mr-1" />
+                                                    {t.room.room_number}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-xs text-slate-400">Unassigned</span>
+                                            )}
                                         </Td>
                                         <Td>
                                             <span className="font-mono font-bold text-teal-700 text-sm">
@@ -384,19 +402,39 @@ export default function Treatments({ categories = [], treatments = [] }) {
                 size="md"
             >
                 <form onSubmit={handleTreatmentSubmit} className="space-y-4">
-                    <SelectInput
-                        label="Treatment Category"
-                        value={treatmentForm.data.category_id}
-                        onChange={(e) => treatmentForm.setData('category_id', e.target.value)}
-                        error={treatmentForm.errors.category_id}
-                        required
-                    >
-                        {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                                {c.name}
-                            </option>
-                        ))}
-                    </SelectInput>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <SelectInput
+                            label="Treatment Category"
+                            value={treatmentForm.data.category_id}
+                            onChange={(e) => treatmentForm.setData('category_id', e.target.value)}
+                            error={treatmentForm.errors.category_id}
+                            required
+                        >
+                            {categories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </SelectInput>
+
+                        <SelectInput
+                            label="Treatment Room"
+                            placeholder="Select room (Optional)"
+                            value={treatmentForm.data.room_id}
+                            onChange={(e) => treatmentForm.setData('room_id', e.target.value)}
+                            error={treatmentForm.errors.room_id}
+                        >
+                            {rooms.map((room) => (
+                                <option
+                                    key={room.id}
+                                    value={room.id}
+                                    data-description={room.description || ''}
+                                >
+                                    {room.room_number}
+                                </option>
+                            ))}
+                        </SelectInput>
+                    </div>
 
                     <TextInput
                         label="Treatment / Procedure Name"

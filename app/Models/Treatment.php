@@ -17,6 +17,7 @@ class Treatment extends Model
      */
     protected $fillable = [
         'category_id',
+        'room_id',
         'name',
         'price',
         'ordering',
@@ -29,6 +30,7 @@ class Treatment extends Model
     protected function casts(): array
     {
         return [
+            'room_id' => 'integer',
             'price' => 'decimal:2',
             'ordering' => 'integer',
             'is_active' => 'boolean',
@@ -38,6 +40,11 @@ class Treatment extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(TreatmentCategory::class, 'category_id');
+    }
+
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class, 'room_id');
     }
 
     public function patientTreatments(): HasMany

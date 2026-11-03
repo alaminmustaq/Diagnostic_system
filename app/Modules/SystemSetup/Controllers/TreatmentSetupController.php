@@ -3,6 +3,7 @@
 namespace App\Modules\SystemSetup\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Room;
 use App\Models\Treatment;
 use App\Models\TreatmentCategory;
 use Illuminate\Http\RedirectResponse;
@@ -18,14 +19,19 @@ class TreatmentSetupController extends Controller
             ->orderBy('ordering')
             ->get();
 
-        $allTreatments = Treatment::with('category')
+        $allTreatments = Treatment::with(['category', 'room'])
             ->orderBy('category_id')
             ->orderBy('ordering')
+            ->get();
+
+        $rooms = Room::where('is_active', true)
+            ->orderBy('room_number')
             ->get();
 
         return Inertia::render('SystemSetup/Treatments', [
             'categories' => $categories,
             'treatments' => $allTreatments,
+            'rooms' => $rooms,
         ]);
     }
 
@@ -79,6 +85,7 @@ class TreatmentSetupController extends Controller
     {
         $validated = $request->validate([
             'category_id' => ['required', 'exists:treatment_categories,id'],
+            'room_id' => ['nullable', 'exists:rooms,id'],
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
             'ordering' => ['nullable', 'integer', 'min:0'],
@@ -87,6 +94,7 @@ class TreatmentSetupController extends Controller
 
         Treatment::create([
             'category_id' => $validated['category_id'],
+            'room_id' => $request->filled('room_id') ? $request->input('room_id') : null,
             'name' => $validated['name'],
             'price' => $validated['price'],
             'ordering' => $validated['ordering'] ?? 0,
@@ -102,6 +110,7 @@ class TreatmentSetupController extends Controller
 
         $validated = $request->validate([
             'category_id' => ['required', 'exists:treatment_categories,id'],
+            'room_id' => ['nullable', 'exists:rooms,id'],
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
             'ordering' => ['nullable', 'integer', 'min:0'],
@@ -110,6 +119,7 @@ class TreatmentSetupController extends Controller
 
         $treatment->update([
             'category_id' => $validated['category_id'],
+            'room_id' => $request->filled('room_id') ? $request->input('room_id') : null,
             'name' => $validated['name'],
             'price' => $validated['price'],
             'ordering' => $validated['ordering'] ?? 0,

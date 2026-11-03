@@ -19,6 +19,7 @@ import {
     Activity,
     Settings as SettingsIcon,
     Sliders,
+    DoorOpen,
 } from 'lucide-react';
 import Alert from '../Components/UI/Alert';
 
@@ -53,6 +54,7 @@ export default function AppLayout({ children, title }) {
 
     const adminNav = [
         { name: 'Doctor Setup', href: '/admin/doctors', icon: UserCog },
+        { name: 'Room Setup', href: '/admin/rooms', icon: DoorOpen },
         { name: 'Treatments Catalog', href: '/admin/treatments', icon: Layers },
     ];
 

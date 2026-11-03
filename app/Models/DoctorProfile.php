@@ -16,13 +16,27 @@ class DoctorProfile extends Model
      */
     protected $fillable = [
         'user_id',
+        'room_id',
         'designation',
         'degrees',
-        'room_number',
         'professional_phone',
         'bio_summary',
         'default_visit_rate',
     ];
+
+    /**
+     * Always eager-load the associated room.
+     *
+     * @var list<string>
+     */
+    protected $with = ['room'];
+
+    /**
+     * Append computed room_number from the room relation for frontend convenience.
+     *
+     * @var list<string>
+     */
+    protected $appends = ['room_number'];
 
     /**
      * @return array<string, string>
@@ -30,6 +44,7 @@ class DoctorProfile extends Model
     protected function casts(): array
     {
         return [
+            'room_id' => 'integer',
             'default_visit_rate' => 'decimal:2',
         ];
     }
@@ -38,5 +53,14 @@ class DoctorProfile extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
-}
 
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class, 'room_id');
+    }
+
+    public function getRoomNumberAttribute(): ?string
+    {
+        return $this->room?->room_number;
+    }
+}

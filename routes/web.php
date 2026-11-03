@@ -9,6 +9,7 @@ use App\Modules\Reports\Controllers\ReportController;
 use App\Modules\SerialBooking\Controllers\SerialBookingController;
 use App\Modules\Settings\Controllers\SettingsController;
 use App\Modules\SystemSetup\Controllers\DoctorSetupController;
+use App\Modules\SystemSetup\Controllers\RoomSetupController;
 use App\Modules\SystemSetup\Controllers\TreatmentSetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +31,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/doctors', [DoctorSetupController::class, 'store'])->name('doctors.store');
         Route::put('/doctors/{id}', [DoctorSetupController::class, 'update'])->name('doctors.update');
         Route::delete('/doctors/{id}', [DoctorSetupController::class, 'destroy'])->name('doctors.destroy');
+
+        // Room Setup
+        Route::get('/rooms', [RoomSetupController::class, 'index'])->name('rooms.index');
+        Route::post('/rooms', [RoomSetupController::class, 'store'])->name('rooms.store');
+        Route::put('/rooms/{id}', [RoomSetupController::class, 'update'])->name('rooms.update');
+        Route::delete('/rooms/{id}', [RoomSetupController::class, 'destroy'])->name('rooms.destroy');
 
         // Treatment Setup
         Route::get('/treatments', [TreatmentSetupController::class, 'index'])->name('treatments.index');
