@@ -26,6 +26,7 @@ class CompanySetting extends Model
         'print_separate_slips',
         'token_header_note',
         'token_footer_note',
+        'whatsapp_followup_message',
     ];
 
     /**
@@ -63,8 +64,24 @@ class CompanySetting extends Model
                 'print_separate_slips' => true,
                 'token_header_note' => 'Patient Serial Consultation Token',
                 'token_footer_note' => 'Please wait in the reception lounge until your serial is announced.',
+                'whatsapp_followup_message' => 'Hello {patient_name}, this is a reminder from {clinic_name}. Your scheduled follow-up consultation with {doctor_name} is due on {follow_up_date}. Please visit on time. Thank you!',
             ]
         );
+    }
+
+    public function formatWhatsAppMessage(?string $patientName, ?string $doctorName, ?string $followUpDate): string
+    {
+        $template = $this->whatsapp_followup_message ?: 'Hello {patient_name}, this is a reminder from {clinic_name}. Your scheduled follow-up consultation with {doctor_name} is due on {follow_up_date}. Please visit on time. Thank you!';
+
+        return strtr($template, [
+            '{patient_name}' => $patientName ?: 'Valued Patient',
+            '{doctor_name}' => $doctorName ?: 'Doctor',
+            '{follow_up_date}' => $followUpDate ?: '',
+            '{clinic_name}' => $this->company_name ?: 'Aesthetic & Dermatology Clinic',
+            '{clinic_phone}' => $this->company_phone ?: '',
+            '{clinic_email}' => $this->company_email ?: '',
+            '{clinic_address}' => $this->company_address ?: '',
+        ]);
     }
 
     protected function logoUrl(): Attribute

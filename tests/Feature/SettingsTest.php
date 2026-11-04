@@ -149,5 +149,31 @@ class SettingsTest extends TestCase
             'token_header_note' => 'Custom 76mm Token',
         ]);
     }
+
+    public function test_can_update_whatsapp_notification_template_in_configuration(): void
+    {
+        $customTemplate = 'Dear {patient_name}, reminder from {clinic_name}. Your checkup with {doctor_name} is on {follow_up_date}. Call {clinic_phone}.';
+
+        $response = $this->actingAs($this->admin)->post('/settings/configuration', [
+            'token_print_size' => '80mm',
+            'whatsapp_followup_message' => $customTemplate,
+        ]);
+
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('company_settings', [
+            'whatsapp_followup_message' => $customTemplate,
+        ]);
+
+        $setting = CompanySetting::getSettings();
+        $this->assertEquals($customTemplate, $setting->whatsapp_followup_message);
+
+        // Test formatting
+        $formatted = $setting->formatWhatsAppMessage('Nazmul Huda', 'Dr. Farhana', '2026-11-10');
+        $this->assertStringContainsString('Dear Nazmul Huda', $formatted);
+        $this->assertStringContainsString('Dr. Farhana', $formatted);
+        $this->assertStringContainsString('2026-11-10', $formatted);
+        $this->assertStringContainsString($setting->company_name, $formatted);
+    }
 }
 

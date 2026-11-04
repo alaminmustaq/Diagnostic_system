@@ -168,5 +168,112 @@ class FollowUpAndReportsTest extends TestCase
         $this->assertEquals('HydraFacial', $reportData['records'][0]['treatment']['name']);
         $this->assertEquals('#EC4899', $reportData['records'][0]['treatment']['color']);
     }
+
+    public function test_follow_up_page_filters_by_date_range_from_and_to_date(): void
+    {
+        $today = Carbon::today()->toDateString();
+        $tomorrow = Carbon::tomorrow()->toDateString();
+        $nextWeek = Carbon::today()->addDays(7)->toDateString();
+
+        $fu1 = FollowUp::create([
+            'patient_id' => $this->patient->id,
+            'doctor_id' => $this->doctor->id,
+            'follow_up_date' => $today,
+            'status' => 'pending',
+            'is_notified' => false,
+        ]);
+
+        $fu2 = FollowUp::create([
+            'patient_id' => $this->patient->id,
+            'doctor_id' => $this->doctor->id,
+            'follow_up_date' => $tomorrow,
+            'status' => 'pending',
+            'is_notified' => false,
+        ]);
+
+        $fu3 = FollowUp::create([
+            'patient_id' => $this->patient->id,
+            'doctor_id' => $this->doctor->id,
+            'follow_up_date' => $nextWeek,
+            'status' => 'pending',
+            'is_notified' => false,
+        ]);
+
+        // Filter exact range: today to tomorrow
+        $response = $this->actingAs($this->admin)->get("/follow-ups?from_date={$today}&to_date={$tomorrow}");
+        $response->assertStatus(200);
+
+        $props = $response->viewData('page')['props'];
+        $followUpIds = collect($props['followUps'])->pluck('id')->all();
+
+        $this->assertContains($fu1->id, $followUpIds);
+        $this->assertContains($fu2->id, $followUpIds);
+        $this->assertNotContains($fu3->id, $followUpIds);
+
+        // Filter from next week onwards
+        $responseNextWeek = $this->actingAs($this->admin)->get("/follow-ups?from_date={$nextWeek}");
+        $responseNextWeek->assertStatus(200);
+
+        $nextWeekIds = collect($responseNextWeek->viewData('page')['props']['followUps'])->pluck('id')->all();
+        $this->assertContains($fu3->id, $nextWeekIds);
+        $this->assertNotContains($fu1->id, $nextWeekIds);
+        $this->assertNotContains($fu2->id, $nextWeekIds);
+    }
+
+    public function test_follow_up_page_filters_by_patient_search(): void
+    {
+        $patientA = User::create([
+            'name' => 'Nazmul Huda',
+            'phone' => '01711223344',
+            'role' => 'patient',
+            'user_code' => 'PT-5001',
+        ]);
+
+        $patientB = User::create([
+            'name' => 'Sultana Razia',
+            'phone' => '01899887766',
+            'role' => 'patient',
+            'user_code' => 'PT-5002',
+        ]);
+
+        $today = Carbon::today()->toDateString();
+
+        $fuA = FollowUp::create([
+            'patient_id' => $patientA->id,
+            'doctor_id' => $this->doctor->id,
+            'follow_up_date' => $today,
+            'status' => 'pending',
+            'is_notified' => false,
+        ]);
+
+        $fuB = FollowUp::create([
+            'patient_id' => $patientB->id,
+            'doctor_id' => $this->doctor->id,
+            'follow_up_date' => $today,
+            'status' => 'pending',
+            'is_notified' => false,
+        ]);
+
+        // Search by name "Nazmul"
+        $respName = $this->actingAs($this->admin)->get('/follow-ups?patient_search=Nazmul');
+        $respName->assertStatus(200);
+        $idsName = collect($respName->viewData('page')['props']['followUps'])->pluck('id')->all();
+        $this->assertContains($fuA->id, $idsName);
+        $this->assertNotContains($fuB->id, $idsName);
+
+        // Search by phone "0189988"
+        $respPhone = $this->actingAs($this->admin)->get('/follow-ups?patient_search=0189988');
+        $respPhone->assertStatus(200);
+        $idsPhone = collect($respPhone->viewData('page')['props']['followUps'])->pluck('id')->all();
+        $this->assertContains($fuB->id, $idsPhone);
+        $this->assertNotContains($fuA->id, $idsPhone);
+
+        // Search by user_code "PT-5001"
+        $respCode = $this->actingAs($this->admin)->get('/follow-ups?patient_search=PT-5001');
+        $respCode->assertStatus(200);
+        $idsCode = collect($respCode->viewData('page')['props']['followUps'])->pluck('id')->all();
+        $this->assertContains($fuA->id, $idsCode);
+        $this->assertNotContains($fuB->id, $idsCode);
+    }
 }
 

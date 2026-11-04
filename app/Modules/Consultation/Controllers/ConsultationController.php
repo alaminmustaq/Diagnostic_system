@@ -5,6 +5,7 @@ namespace App\Modules\Consultation\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
 use App\Models\PatientTreatment;
+use App\Models\Treatment;
 use App\Models\User;
 use App\Models\Visit;
 use Carbon\Carbon;
@@ -41,11 +42,14 @@ class ConsultationController extends Controller
             ->orderBy('id', 'asc')
             ->get();
 
+        $allTreatments = Treatment::with('category')->where('is_active', true)->orderBy('name')->get();
+
         return Inertia::render('Consultation/Queue', [
             'visits' => $visits,
             'doctors' => $doctors,
             'selectedDoctorId' => $selectedDoctorId,
             'treatmentQueue' => $treatmentQueue,
+            'allTreatments' => $allTreatments,
             'today' => $today,
             'activeTab' => $request->query('tab', 'visits'),
         ]);
@@ -99,6 +103,22 @@ class ConsultationController extends Controller
             'status' => ['required', 'in:waiting,in_consultation,completed,cancelled'],
         ]);
 
+        $user = $request->user();
+
+        if ($validated['status'] === 'in_consultation') {
+            if (!$user->can('call-patient')) {
+                abort(403, 'Unauthorized action: You do not have permission to call patients.');
+            }
+        } elseif ($validated['status'] === 'cancelled') {
+            if (!$user->can('cancel-serial')) {
+                abort(403, 'Unauthorized action: You do not have permission to cancel serials.');
+            }
+        } else {
+            if (!$user->can('update-consultation-queue') && !$user->can('edit-consultation-queue') && !$user->can('call-patient')) {
+                abort(403, 'Unauthorized action: You do not have permission to update consultation status.');
+            }
+        }
+
         $visit = Visit::findOrFail($id);
 
         // If setting this visit to in_consultation, ensure any previously in_consultation for this doctor is completed or handled if needed
@@ -119,6 +139,22 @@ class ConsultationController extends Controller
         $validated = $request->validate([
             'status' => ['required', 'in:waiting,in_collection,sample'],
         ]);
+
+        $user = $request->user();
+
+        if ($validated['status'] === 'in_collection') {
+            if (!$user->can('in-collection')) {
+                abort(403, 'Unauthorized action: You do not have permission to mark treatment as In Collection.');
+            }
+        } elseif ($validated['status'] === 'sample') {
+            if (!$user->can('sample')) {
+                abort(403, 'Unauthorized action: You do not have permission to mark sample as done.');
+            }
+        } else {
+            if (!$user->can('update-consultation-queue') && !$user->can('edit-consultation-queue') && !$user->can('in-collection')) {
+                abort(403, 'Unauthorized action: You do not have permission to update treatment status.');
+            }
+        }
 
         $treatment = PatientTreatment::with('treatment')->findOrFail($id);
 
@@ -161,6 +197,43 @@ class ConsultationController extends Controller
         }
 
         return redirect()->back()->with('success', "Follow-up scheduled for {$validated['follow_up_date']} and consultation marked complete!");
+    }
+
+    public function updateTreatment(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user->can('update-consultation-queue') && !$user->can('edit-consultation-queue') && !$user->can('edit-pos-treatment')) {
+            abort(403, 'Unauthorized action: You do not have permission to edit treatments.');
+        }
+
+        $validated = $request->validate([
+            'treatment_id' => ['required', 'exists:treatments,id'],
+            'status' => ['required', 'in:waiting,in_collection,sample'],
+            'date_administered' => ['required', 'date'],
+        ]);
+
+        $record = PatientTreatment::with('treatment')->findOrFail($id);
+        $record->update([
+            'treatment_id' => $validated['treatment_id'],
+            'status' => $validated['status'],
+            'date_administered' => $validated['date_administered'],
+        ]);
+
+        return redirect()->back()->with('success', "Treatment record {$record->token_number} updated successfully.");
+    }
+
+    public function destroyTreatment(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+        if (!$user->can('delete-consultation-queue') && !$user->can('delete-pos-treatment')) {
+            abort(403, 'Unauthorized action: You do not have permission to delete treatments.');
+        }
+
+        $record = PatientTreatment::findOrFail($id);
+        $token = $record->token_number ?: "#{$record->id}";
+        $record->delete();
+
+        return redirect()->back()->with('success', "Treatment record {$token} deleted successfully.");
     }
 }
 

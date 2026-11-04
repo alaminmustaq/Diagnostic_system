@@ -25,6 +25,9 @@ class DatabaseSeeder extends Seeder
         // 0. Company Settings
         \App\Models\CompanySetting::getSettings();
 
+        // 0.5 Roles & Permissions
+        $this->call(RolePermissionSeeder::class);
+
         // 1. Admin
         $admin = User::firstOrCreate(
             ['phone' => '01700000000'],
@@ -34,6 +37,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
             ]
         );
+        $admin->assignRole('Super Admin');
 
         // 1.5 Rooms
         $room102 = Room::firstOrCreate(
@@ -63,6 +67,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
             ]
         );
+        $doctorUser1->assignRole('Doctor');
 
         DoctorProfile::firstOrCreate(
             ['user_id' => $doctorUser1->id],
@@ -84,6 +89,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
             ]
         );
+        $doctorUser2->assignRole('Doctor');
 
         DoctorProfile::firstOrCreate(
             ['user_id' => $doctorUser2->id],
@@ -96,6 +102,17 @@ class DatabaseSeeder extends Seeder
                 'default_visit_rate' => 1200.00,
             ]
         );
+
+        // 2.5 Receptionist Staff User
+        $receptionistUser = User::firstOrCreate(
+            ['phone' => '01740000000'],
+            [
+                'name' => 'Front Desk Receptionist',
+                'role' => 'admin',
+                'password' => Hash::make('password'),
+            ]
+        );
+        $receptionistUser->syncRoles(['Receptionist']);
 
         // 3. Treatment Categories
         $catLaser = TreatmentCategory::firstOrCreate(

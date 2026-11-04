@@ -23,6 +23,7 @@ import {
     Wallet,
     Landmark,
     Smartphone,
+    ShieldCheck,
 } from 'lucide-react';
 import Alert from '../Components/UI/Alert';
 
@@ -45,46 +46,76 @@ export default function AppLayout({ children, title }) {
         }
     }, [flash]);
 
+    // Granular permission check helper
+    const can = (permission) => {
+        if (!user) return false;
+        if (user.is_super_admin) return true;
+        const perms = user.permissions || [];
+        if (perms.includes(permission)) return true;
+        if (permission.startsWith('edit-')) {
+            const updatePerm = 'update-' + permission.slice(5);
+            if (perms.includes(updatePerm)) return true;
+        } else if (permission.startsWith('update-')) {
+            const editPerm = 'edit-' + permission.slice(7);
+            if (perms.includes(editPerm)) return true;
+        }
+        return false;
+    };
+
     const navigation = [
-        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { name: 'Serial Booking', href: '/booking', icon: Ticket, badge: 'Desk' },
-        { name: 'Queue Board', href: '/consultation/queue', icon: Users },
-        { name: 'Doctor Consultation', href: '/consultation/room', icon: Stethoscope },
-        { name: 'Treatment POS', href: '/pos', icon: CreditCard },
-        { name: 'Follow-Ups (WhatsApp)', href: '/follow-ups', icon: MessageCircle },
-        { name: 'Reports & Analytics', href: '/reports', icon: BarChart3 },
+        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view-dashboard' },
+        { name: 'Serial Booking', href: '/booking', icon: Ticket, badge: 'Desk', permission: 'view-booking' },
+        { name: 'Queue Board', href: '/consultation/queue', icon: Users, permission: 'view-consultation-queue' },
+        { name: 'Doctor Consultation', href: '/consultation/room', icon: Stethoscope, permission: 'view-consultation-room' },
+        { name: 'Treatment POS', href: '/pos', icon: CreditCard, permission: 'view-pos-treatment' },
+        { name: 'Patient Treatments', href: '/patient-treatments', icon: Activity, permission: 'view-pos-treatment' },
+        { name: 'Follow-Ups (WhatsApp)', href: '/follow-ups', icon: MessageCircle, permission: 'view-follow-ups' },
+        { name: 'Reports & Analytics', href: '/reports', icon: BarChart3, permission: 'view-reports' },
     ];
 
     const adminNav = [
-        { name: 'Doctor Setup', href: '/admin/doctors', icon: UserCog },
-        { name: 'Room Setup', href: '/admin/rooms', icon: DoorOpen },
-        { name: 'Treatments Catalog', href: '/admin/treatments', icon: Layers },
+        { name: 'Doctor Setup', href: '/admin/doctors', icon: UserCog, permission: 'view-doctors' },
+        { name: 'Room Setup', href: '/admin/rooms', icon: DoorOpen, permission: 'view-rooms' },
+        { name: 'Treatments Catalog', href: '/admin/treatments', icon: Layers, permission: 'view-treatments' },
     ];
 
     const financeNav = [
-        { name: 'Bank', href: '/finance/banks', icon: Landmark },
-        { name: 'Mobile Banking', href: '/finance/mobile-banking', icon: Smartphone },
+        { name: 'Bank', href: '/finance/banks', icon: Landmark, permission: 'view-banks' },
+        { name: 'Mobile Banking', href: '/finance/mobile-banking', icon: Smartphone, permission: 'view-mobile-banking' },
     ];
 
     const settingsNav = [
-        { name: 'Company Setup', href: '/settings/company', icon: Building2 },
-        { name: 'Configuration', href: '/settings/configuration', icon: Sliders },
+        { name: 'Company Setup', href: '/settings/company', icon: Building2, permission: 'view-company-settings' },
+        { name: 'Configuration', href: '/settings/configuration', icon: Sliders, permission: 'view-configuration-settings' },
+        { name: 'Roles & Permissions', href: '/settings/roles', icon: ShieldCheck, permission: 'view-roles-permissions' },
     ];
 
+    const visibleNav = navigation.filter((item) => !item.permission || can(item.permission));
+    const visibleAdminNav = adminNav.filter((item) => !item.permission || can(item.permission));
+    const visibleFinanceNav = financeNav.filter((item) => !item.permission || can(item.permission));
+    const visibleSettingsNav = settingsNav.filter((item) => !item.permission || can(item.permission));
+
+    const page = usePage();
+    const currentPath = (page.url || (typeof window !== 'undefined' ? window.location.pathname : '')).split('?')[0];
+
     const isCurrentUrl = (path) => {
-        const currentPath = window.location.pathname;
         if (path === '/dashboard') return currentPath === '/dashboard' || currentPath === '/';
         return currentPath.startsWith(path);
     };
 
-    const isFinanceActive = typeof window !== 'undefined' && window.location.pathname.startsWith('/finance');
-    const [financeOpen, setFinanceOpen] = useState(true);
+    const isFinanceActive = currentPath.startsWith('/finance');
+    const [financeOpen, setFinanceOpen] = useState(isFinanceActive);
 
-    const isSettingsActive = typeof window !== 'undefined' && window.location.pathname.startsWith('/settings');
-    const [settingsOpen, setSettingsOpen] = useState(true);
+    const isSettingsActive = currentPath.startsWith('/settings');
+    const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
+
+    React.useEffect(() => {
+        setFinanceOpen(isFinanceActive);
+        setSettingsOpen(isSettingsActive);
+    }, [currentPath]);
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row antialiased">
+        <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-slate-50 flex flex-col lg:flex-row antialiased">
             {/* Mobile Header */}
             <div className="lg:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-md z-30">
                 <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
@@ -114,15 +145,15 @@ export default function AppLayout({ children, title }) {
 
             {/* Sidebar Desktop & Mobile */}
             <aside
-                className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between transition-transform duration-300 lg:static lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-40 w-64 h-screen bg-slate-900 text-slate-300 flex flex-col justify-between transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 shrink-0 overflow-y-auto sidebar-scrollbar select-none ${
                     mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
             >
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 flex flex-col">
                     {/* Brand */}
                     <Link
                         href="/dashboard"
-                        className="h-16 px-4 flex items-center gap-3 border-b border-slate-800/80 bg-slate-950/40 hover:bg-slate-950/70 transition group"
+                        className="sticky top-0 z-10 h-16 px-4 flex items-center gap-3 border-b border-slate-800/80 bg-slate-900/95 backdrop-blur-xs hover:bg-slate-950/70 transition group shrink-0"
                     >
                         {companyLogo ? (
                             <div className="w-10 h-10 rounded-xl bg-white/10 p-1.5 border border-white/15 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
@@ -145,158 +176,168 @@ export default function AppLayout({ children, title }) {
 
                     {/* Navigation Links */}
                     <div className="px-3 py-4 space-y-1">
-                        <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                            Clinic Modules
-                        </p>
-                        {navigation.map((item) => {
-                            const active = isCurrentUrl(item.href);
-                            const Icon = item.icon;
-                            return (
-                                <Link
-                                    key={item.name}
-                                    href={item.href}
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                                        active
-                                            ? 'bg-teal-600 text-white font-semibold shadow-md shadow-teal-600/30'
+                        {visibleNav.length > 0 && (
+                            <>
+                                <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                    Clinic Modules
+                                </p>
+                                {visibleNav.map((item) => {
+                                    const active = isCurrentUrl(item.href);
+                                    const Icon = item.icon;
+                                    return (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                                                active
+                                                    ? 'bg-teal-600 text-white font-semibold shadow-md shadow-teal-600/30'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Icon className={`w-4 h-4 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                                <span>{item.name}</span>
+                                            </div>
+                                            {item.badge && (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${active ? 'bg-teal-700 text-teal-100' : 'bg-slate-800 text-slate-400'}`}>
+                                                    {item.badge}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
+                            </>
+                        )}
+
+                        {/* Admin System Setup */}
+                        {visibleAdminNav.length > 0 && (
+                            <div className="pt-5 pb-1">
+                                <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                    System Setup
+                                </p>
+                                {visibleAdminNav.map((item) => {
+                                    const active = isCurrentUrl(item.href);
+                                    const Icon = item.icon;
+                                    return (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                                                active
+                                                    ? 'bg-teal-600 text-white font-semibold shadow-md shadow-teal-600/30'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                            }`}
+                                        >
+                                            <Icon className={`w-4 h-4 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                            <span>{item.name}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Finance with Child Items */}
+                        {visibleFinanceNav.length > 0 && (
+                            <div className="pt-4 pb-1">
+                                <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                    Finance
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setFinanceOpen(!financeOpen)}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
+                                        isFinanceActive
+                                            ? 'bg-slate-800 text-white font-semibold'
                                             : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                                     }`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <Icon className={`w-4 h-4 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                        <span>{item.name}</span>
+                                        <Wallet className={`w-4 h-4 transition ${isFinanceActive ? 'text-teal-400' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                        <span>Finance</span>
                                     </div>
-                                    {item.badge && (
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${active ? 'bg-teal-700 text-teal-100' : 'bg-slate-800 text-slate-400'}`}>
-                                            {item.badge}
-                                        </span>
-                                    )}
-                                </Link>
-                            );
-                        })}
+                                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${financeOpen ? 'rotate-180 text-teal-400' : 'text-slate-500'}`} />
+                                </button>
 
-                        {/* Admin System Setup */}
-                        <div className="pt-5 pb-1">
-                            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                System Setup
-                            </p>
-                            {adminNav.map((item) => {
-                                const active = isCurrentUrl(item.href);
-                                const Icon = item.icon;
-                                return (
-                                    <Link
-                                        key={item.name}
-                                        href={item.href}
-                                        onClick={() => setMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                                            active
-                                                ? 'bg-teal-600 text-white font-semibold shadow-md shadow-teal-600/30'
-                                                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                                        }`}
-                                    >
-                                        <Icon className={`w-4 h-4 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                        <span>{item.name}</span>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-
-                        {/* Finance with Child Items */}
-                        <div className="pt-4 pb-1">
-                            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                Finance
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => setFinanceOpen(!financeOpen)}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
-                                    isFinanceActive
-                                        ? 'bg-slate-800 text-white font-semibold'
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Wallet className={`w-4 h-4 transition ${isFinanceActive ? 'text-teal-400' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                    <span>Finance</span>
-                                </div>
-                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${financeOpen ? 'rotate-180 text-teal-400' : 'text-slate-500'}`} />
-                            </button>
-
-                            {financeOpen && (
-                                <div className="mt-1 ml-3.5 pl-3 border-l border-slate-800 space-y-1">
-                                    {financeNav.map((item) => {
-                                        const active = isCurrentUrl(item.href);
-                                        const Icon = item.icon;
-                                        return (
-                                            <Link
-                                                key={item.name}
-                                                href={item.href}
-                                                onClick={() => setMobileMenuOpen(false)}
-                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
-                                                    active
-                                                        ? 'bg-teal-600 text-white font-semibold shadow-xs'
-                                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                                                }`}
-                                            >
-                                                <Icon className={`w-3.5 h-3.5 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                                <span>{item.name}</span>
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                                {financeOpen && (
+                                    <div className="mt-1 ml-3.5 pl-3 border-l border-slate-800 space-y-1">
+                                        {visibleFinanceNav.map((item) => {
+                                            const active = isCurrentUrl(item.href);
+                                            const Icon = item.icon;
+                                            return (
+                                                <Link
+                                                    key={item.name}
+                                                    href={item.href}
+                                                    onClick={() => setMobileMenuOpen(false)}
+                                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
+                                                        active
+                                                            ? 'bg-teal-600 text-white font-semibold shadow-xs'
+                                                            : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                                    }`}
+                                                >
+                                                    <Icon className={`w-3.5 h-3.5 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                                    <span>{item.name}</span>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Settings with Child Items */}
-                        <div className="pt-4 pb-1">
-                            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                Settings
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => setSettingsOpen(!settingsOpen)}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
-                                    isSettingsActive
-                                        ? 'bg-slate-800 text-white font-semibold'
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <SettingsIcon className={`w-4 h-4 transition ${isSettingsActive ? 'text-teal-400' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                    <span>Settings</span>
-                                </div>
-                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-teal-400' : 'text-slate-500'}`} />
-                            </button>
+                        {visibleSettingsNav.length > 0 && (
+                            <div className="pt-4 pb-1">
+                                <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                                    Settings
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setSettingsOpen(!settingsOpen)}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
+                                        isSettingsActive
+                                            ? 'bg-slate-800 text-white font-semibold'
+                                            : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <SettingsIcon className={`w-4 h-4 transition ${isSettingsActive ? 'text-teal-400' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                        <span>Settings</span>
+                                    </div>
+                                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180 text-teal-400' : 'text-slate-500'}`} />
+                                </button>
 
-                            {settingsOpen && (
-                                <div className="mt-1 ml-3.5 pl-3 border-l border-slate-800 space-y-1">
-                                    {settingsNav.map((item) => {
-                                        const active = isCurrentUrl(item.href);
-                                        const Icon = item.icon;
-                                        return (
-                                            <Link
-                                                key={item.name}
-                                                href={item.href}
-                                                onClick={() => setMobileMenuOpen(false)}
-                                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
-                                                    active
-                                                        ? 'bg-teal-600 text-white font-semibold shadow-xs'
-                                                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                                                }`}
-                                            >
-                                                <Icon className={`w-3.5 h-3.5 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
-                                                <span>{item.name}</span>
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                                {settingsOpen && (
+                                    <div className="mt-1 ml-3.5 pl-3 border-l border-slate-800 space-y-1">
+                                        {visibleSettingsNav.map((item) => {
+                                            const active = isCurrentUrl(item.href);
+                                            const Icon = item.icon;
+                                            return (
+                                                <Link
+                                                    key={item.name}
+                                                    href={item.href}
+                                                    onClick={() => setMobileMenuOpen(false)}
+                                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
+                                                        active
+                                                            ? 'bg-teal-600 text-white font-semibold shadow-xs'
+                                                            : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                                    }`}
+                                                >
+                                                    <Icon className={`w-3.5 h-3.5 transition ${active ? 'text-white' : 'text-slate-400 group-hover:text-teal-400'}`} />
+                                                    <span>{item.name}</span>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Bottom User Profile */}
-                <div className="p-3 border-t border-slate-800/80 bg-slate-950/30">
+                <div className="sticky bottom-0 z-10 p-3 border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-xs shrink-0 mt-auto">
                     <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50">
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-xs uppercase shrink-0 border border-teal-500/30">
@@ -327,7 +368,7 @@ export default function AppLayout({ children, title }) {
             )}
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+            <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
                 {/* Desktop Top Navbar */}
                 <header className="h-16 bg-white border-b border-slate-200/80 px-6 hidden lg:flex items-center justify-between shadow-2xs">
                     <div className="flex items-center gap-3">

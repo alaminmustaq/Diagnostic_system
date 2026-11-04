@@ -197,5 +197,172 @@ class SerialBookingTest extends TestCase
             'final_paid_amount' => '1000.00',
         ]);
     }
+
+    public function test_serial_booking_supports_bank_and_mobile_banking_with_invoices(): void
+    {
+        $bankAccount = \App\Models\BankAccount::create([
+            'type' => 'bank',
+            'bank_name' => 'City Bank',
+            'account_name' => 'Clinic Collection',
+            'account_number' => '9988776655',
+            'is_active' => true,
+        ]);
+
+        $mobileAccount = \App\Models\BankAccount::create([
+            'type' => 'mobile_banking',
+            'bank_name' => 'bKash',
+            'account_name' => 'Reception bKash',
+            'account_number' => '01712345678',
+            'account_type' => 'Merchant',
+            'is_active' => true,
+        ]);
+
+        // 1. Bank Payment
+        $this->actingAs($this->admin)->post('/booking/store', [
+            'phone' => '01711223344',
+            'name' => 'Bank Paying Patient',
+            'doctor_id' => $this->doctor->id,
+            'visit_date' => Carbon::today()->toDateString(),
+            'base_amount' => '1000.00',
+            'final_paid_amount' => '1000.00',
+            'payment_method' => 'bank',
+            'bank_account_id' => $bankAccount->id,
+        ]);
+
+        $visit1 = Visit::where('patient_id', User::where('phone', '01711223344')->value('id'))->firstOrFail();
+        $this->assertNotNull($visit1->invoice_number);
+        $this->assertStringStartsWith('INV-VIS-', $visit1->invoice_number);
+        $this->assertNotNull($visit1->payment_id);
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $visit1->payment_id,
+            'visit_id' => $visit1->id,
+            'invoice_number' => $visit1->invoice_number,
+            'payment_method' => 'bank',
+            'bank_account_id' => $bankAccount->id,
+            'payment_type' => 'visit',
+        ]);
+
+        // 2. Mobile Banking Payment
+        $this->actingAs($this->admin)->post('/booking/store', [
+            'phone' => '01799887766',
+            'name' => 'Mobile Paying Patient',
+            'doctor_id' => $this->doctor->id,
+            'visit_date' => Carbon::today()->toDateString(),
+            'base_amount' => '1000.00',
+            'final_paid_amount' => '1000.00',
+            'payment_method' => 'mobile_banking',
+            'bank_account_id' => $mobileAccount->id,
+        ]);
+
+        $visit2 = Visit::where('patient_id', User::where('phone', '01799887766')->value('id'))->firstOrFail();
+        $this->assertNotNull($visit2->invoice_number);
+        $this->assertStringStartsWith('INV-VIS-', $visit2->invoice_number);
+        $this->assertNotNull($visit2->payment_id);
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $visit2->payment_id,
+            'visit_id' => $visit2->id,
+            'invoice_number' => $visit2->invoice_number,
+            'payment_method' => 'mobile_banking',
+            'bank_account_id' => $mobileAccount->id,
+            'payment_type' => 'visit',
+        ]);
+    }
+
+    public function test_serial_booking_supports_multi_split_payment_across_cash_multiple_banks_and_mobile_accounts(): void
+    {
+        $bank1 = \App\Models\BankAccount::create([
+            'type' => 'bank',
+            'bank_name' => 'City Bank',
+            'account_name' => 'General Account',
+            'account_number' => '111222333',
+            'is_active' => true,
+        ]);
+
+        $bank2 = \App\Models\BankAccount::create([
+            'type' => 'bank',
+            'bank_name' => 'Eastern Bank',
+            'account_name' => 'Special Deposit',
+            'account_number' => '444555666',
+            'is_active' => true,
+        ]);
+
+        $mobile1 = \App\Models\BankAccount::create([
+            'type' => 'mobile_banking',
+            'bank_name' => 'bKash',
+            'account_name' => 'Main Merchant',
+            'account_number' => '01700111222',
+            'account_type' => 'Merchant',
+            'is_active' => true,
+        ]);
+
+        $mobile2 = \App\Models\BankAccount::create([
+            'type' => 'mobile_banking',
+            'bank_name' => 'Nagad',
+            'account_name' => 'Secondary Agent',
+            'account_number' => '01800333444',
+            'account_type' => 'Agent',
+            'is_active' => true,
+        ]);
+
+        // Total 1000 Tk: 500 Cash, 200 Bank 1, 100 Bank 2, 100 Mobile 1, 100 Mobile 2
+        $response = $this->actingAs($this->admin)->post('/booking/store', [
+            'phone' => '01712349999',
+            'name' => 'Split Pay Patient',
+            'doctor_id' => $this->doctor->id,
+            'visit_date' => Carbon::today()->toDateString(),
+            'base_amount' => '1000.00',
+            'final_paid_amount' => '1000.00',
+            'payment_splits' => [
+                ['payment_method' => 'cash', 'amount' => '500.00'],
+                ['payment_method' => 'bank', 'bank_account_id' => $bank1->id, 'amount' => '200.00'],
+                ['payment_method' => 'bank', 'bank_account_id' => $bank2->id, 'amount' => '100.00'],
+                ['payment_method' => 'mobile_banking', 'bank_account_id' => $mobile1->id, 'amount' => '100.00'],
+                ['payment_method' => 'mobile_banking', 'bank_account_id' => $mobile2->id, 'amount' => '100.00'],
+            ],
+        ]);
+
+        $response->assertRedirect('/booking');
+
+        $visit = Visit::where('patient_id', User::where('phone', '01712349999')->value('id'))->firstOrFail();
+        $this->assertNotNull($visit->payment_id);
+        $payment = Payment::with('splits')->findOrFail($visit->payment_id);
+
+        $this->assertEquals('multiple', $payment->payment_method);
+        $this->assertEquals('1000.00', $payment->final_paid_amount);
+        $this->assertCount(5, $payment->splits);
+
+        $this->assertDatabaseHas('payment_splits', [
+            'payment_id' => $payment->id,
+            'payment_method' => 'cash',
+            'bank_account_id' => null,
+            'amount' => '500.00',
+        ]);
+        $this->assertDatabaseHas('payment_splits', [
+            'payment_id' => $payment->id,
+            'payment_method' => 'bank',
+            'bank_account_id' => $bank1->id,
+            'amount' => '200.00',
+        ]);
+        $this->assertDatabaseHas('payment_splits', [
+            'payment_id' => $payment->id,
+            'payment_method' => 'bank',
+            'bank_account_id' => $bank2->id,
+            'amount' => '100.00',
+        ]);
+        $this->assertDatabaseHas('payment_splits', [
+            'payment_id' => $payment->id,
+            'payment_method' => 'mobile_banking',
+            'bank_account_id' => $mobile1->id,
+            'amount' => '100.00',
+        ]);
+        $this->assertDatabaseHas('payment_splits', [
+            'payment_id' => $payment->id,
+            'payment_method' => 'mobile_banking',
+            'bank_account_id' => $mobile2->id,
+            'amount' => '100.00',
+        ]);
+    }
 }
 

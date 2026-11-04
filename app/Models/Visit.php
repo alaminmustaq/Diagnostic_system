@@ -22,6 +22,8 @@ class Visit extends Model
         'doctor_id',
         'visit_date',
         'serial_number',
+        'invoice_number',
+        'payment_id',
         'status',
     ];
 
@@ -70,6 +72,11 @@ class Visit extends Model
     public function followUps(): HasMany
     {
         return $this->hasMany(FollowUp::class, 'source_visit_id');
+    }
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class, 'payment_id');
     }
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useForm, router } from '@inertiajs/react';
+import { useForm, router, Link } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/UI/PageHeader';
 import Card from '../../Components/UI/Card';
@@ -8,7 +8,7 @@ import Badge from '../../Components/UI/Badge';
 import TextInput from '../../Components/Form/TextInput';
 import SelectInput from '../../Components/Form/SelectInput';
 import InvoiceSlip from '../../Components/Print/InvoiceSlip';
-import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../../Components/Table';
+import { usePermissions } from '../../Utils/permissions';
 import {
     Sparkles,
     CreditCard,
@@ -17,13 +17,27 @@ import {
     Plus,
     Trash2,
     CheckCircle2,
+    AlertCircle,
+    Check,
     Printer,
     DollarSign,
     Layers,
     Search,
+    Landmark,
+    Smartphone,
+    Banknote,
+    Activity,
 } from 'lucide-react';
 
-export default function PosTreatment({ categories = [], recentPayments = [], today, lastInvoice }) {
+export default function PosTreatment({
+    categories = [],
+    recentPayments = [],
+    bankAccounts = [],
+    mobileBankingAccounts = [],
+    today,
+    lastInvoice,
+}) {
+    const { can } = usePermissions();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTreatments, setSelectedTreatments] = useState([]);
     const [activeInvoice, setActiveInvoice] = useState(lastInvoice || null);
@@ -41,6 +55,11 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
         discount_type: '',
         discount_amount: '0.00',
         final_paid_amount: '0.00',
+        payment_method: 'cash',
+        bank_account_id: '',
+        payment_splits: [
+            { payment_method: 'cash', bank_account_id: '', amount: '0.00' },
+        ],
         payment_date: today,
     });
 
@@ -61,6 +80,56 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Split payment helpers
+    const splitTotal = (data.payment_splits || []).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    const netPayable = parseFloat(data.final_paid_amount) || 0;
+    const splitDiff = Math.round((netPayable - splitTotal) * 100) / 100;
+    const isSplitValid = netPayable === 0 || Math.abs(splitDiff) < 0.01;
+
+    const updateSplit = (index, field, value) => {
+        setData((prev) => {
+            const nextSplits = [...prev.payment_splits];
+            nextSplits[index] = { ...nextSplits[index], [field]: value };
+            if (field === 'payment_method' && value === 'cash') {
+                nextSplits[index].bank_account_id = '';
+            } else if (field === 'payment_method' && value === 'bank' && !nextSplits[index].bank_account_id) {
+                nextSplits[index].bank_account_id = bankAccounts[0]?.id || '';
+            } else if (field === 'payment_method' && value === 'mobile_banking' && !nextSplits[index].bank_account_id) {
+                nextSplits[index].bank_account_id = mobileBankingAccounts[0]?.id || '';
+            }
+            return { ...prev, payment_splits: nextSplits };
+        });
+    };
+
+    const addSplitRow = () => {
+        setData((prev) => {
+            const currentSum = (prev.payment_splits || []).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+            const remaining = Math.max(0, (parseFloat(prev.final_paid_amount) || 0) - currentSum);
+            const defaultMethod = bankAccounts.length > 0 ? 'bank' : (mobileBankingAccounts.length > 0 ? 'mobile_banking' : 'cash');
+            const defaultBankId = defaultMethod === 'bank' ? (bankAccounts[0]?.id || '') : (defaultMethod === 'mobile_banking' ? (mobileBankingAccounts[0]?.id || '') : '');
+
+            return {
+                ...prev,
+                payment_splits: [
+                    ...prev.payment_splits,
+                    {
+                        payment_method: defaultMethod,
+                        bank_account_id: defaultBankId,
+                        amount: remaining > 0 ? remaining.toFixed(2) : '0.00',
+                    },
+                ],
+            };
+        });
+    };
+
+    const removeSplitRow = (index) => {
+        setData((prev) => {
+            if (prev.payment_splits.length <= 1) return prev;
+            const nextSplits = prev.payment_splits.filter((_, idx) => idx !== index);
+            return { ...prev, payment_splits: nextSplits };
+        });
+    };
+
     // Update form when treatments selection changes
     useEffect(() => {
         const subtotal = selectedTreatments.reduce((acc, item) => acc + parseFloat(item.price || 0), 0);
@@ -75,12 +144,27 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
             finalAmount = Math.max(0, subtotal - discValue);
         }
 
-        setData((prev) => ({
-            ...prev,
-            treatment_ids: tIds,
-            base_amount: subtotal.toFixed(2),
-            final_paid_amount: finalAmount.toFixed(2),
-        }));
+        const formattedFinal = finalAmount.toFixed(2);
+
+        setData((prev) => {
+            let nextSplits = [...(prev.payment_splits || [])];
+            if (nextSplits.length <= 1) {
+                nextSplits = [
+                    {
+                        payment_method: nextSplits[0]?.payment_method || 'cash',
+                        bank_account_id: nextSplits[0]?.bank_account_id || '',
+                        amount: formattedFinal,
+                    },
+                ];
+            }
+            return {
+                ...prev,
+                treatment_ids: tIds,
+                base_amount: subtotal.toFixed(2),
+                final_paid_amount: formattedFinal,
+                payment_splits: nextSplits,
+            };
+        });
     }, [selectedTreatments, data.discount_type, data.discount_amount]);
 
     // Live search as user types
@@ -164,6 +248,11 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
             return;
         }
 
+        if (!isSplitValid) {
+            alert('Payment split amounts must equal the net paid amount.');
+            return;
+        }
+
         post('/pos/store', {
             onSuccess: () => {
                 reset('phone', 'name', 'discount_type', 'discount_amount');
@@ -180,6 +269,15 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
             <PageHeader
                 title="Point of Sale — Treatment Services"
                 subtitle="Administer clinic procedures, laser therapies, and record treatment payments detached from the doctor consultation queue"
+                actions={
+                    <div className="flex items-center gap-3">
+                        <Link href="/patient-treatments">
+                            <Button variant="secondary" size="sm">
+                                <Activity className="w-4 h-4 mr-1.5" /> View Patient Treatments List
+                            </Button>
+                        </Link>
+                    </div>
+                }
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -478,17 +576,185 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
                                 </div>
                             </div>
 
+                            {/* Payment Method & Split Allocation */}
+                            <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                            Payment Method & Split Allocation
+                                        </span>
+                                        <p className="text-[11px] text-slate-500">
+                                            Pay in single method or split across multiple Cash, Bank & Mobile accounts
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={addSplitRow}
+                                        className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-lg border border-teal-200 transition cursor-pointer"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add Split</span>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {data.payment_splits.map((split, idx) => (
+                                        <div key={idx} className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center">
+                                                        #{idx + 1}
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        {[
+                                                            { id: 'cash', label: 'Cash', icon: Banknote },
+                                                            { id: 'bank', label: 'Bank', icon: Landmark },
+                                                            { id: 'mobile_banking', label: 'Mobile', icon: Smartphone },
+                                                        ].map((pm) => {
+                                                            const Icon = pm.icon;
+                                                            const isSelected = split.payment_method === pm.id;
+                                                            return (
+                                                                <button
+                                                                    key={pm.id}
+                                                                    type="button"
+                                                                    onClick={() => updateSplit(idx, 'payment_method', pm.id)}
+                                                                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                                                                        isSelected
+                                                                            ? 'bg-teal-600 text-white shadow-2xs'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    <Icon className="w-3 h-3" />
+                                                                    <span>{pm.label}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {data.payment_splits.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeSplitRow(idx)}
+                                                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        title="Remove split"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {split.payment_method === 'bank' ? (
+                                                    <SelectInput
+                                                        value={split.bank_account_id}
+                                                        onChange={(e) => updateSplit(idx, 'bank_account_id', e.target.value)}
+                                                        required
+                                                    >
+                                                        <option value="">-- Choose Bank Account --</option>
+                                                        {bankAccounts.map((b) => (
+                                                            <option key={b.id} value={b.id}>
+                                                                {b.bank_name} - {b.account_number} ({b.account_name})
+                                                            </option>
+                                                        ))}
+                                                    </SelectInput>
+                                                ) : split.payment_method === 'mobile_banking' ? (
+                                                    <SelectInput
+                                                        value={split.bank_account_id}
+                                                        onChange={(e) => updateSplit(idx, 'bank_account_id', e.target.value)}
+                                                        required
+                                                    >
+                                                        <option value="">-- Choose Mobile Banking --</option>
+                                                        {mobileBankingAccounts.map((m) => (
+                                                            <option key={m.id} value={m.id}>
+                                                                {m.bank_name ? `${m.bank_name} - ` : ''}{m.account_number} ({m.account_type || 'Personal'}: {m.account_name})
+                                                            </option>
+                                                        ))}
+                                                    </SelectInput>
+                                                ) : (
+                                                    <div className="flex items-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                                                        <Banknote className="w-4 h-4 text-emerald-600 mr-2" />
+                                                        Cash Counter Receipt
+                                                    </div>
+                                                )}
+
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0.01"
+                                                        placeholder="Amount (Tk)"
+                                                        value={split.amount}
+                                                        onChange={(e) => updateSplit(idx, 'amount', e.target.value)}
+                                                        className="w-full pl-3 pr-8 py-2 text-sm font-mono font-bold rounded-lg border border-slate-300 text-slate-800 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                                        required
+                                                    />
+                                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                                                        Tk
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Split Validation Banner */}
+                                <div className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                                    isSplitValid
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                        : 'bg-amber-50 border-amber-200 text-amber-800'
+                                }`}>
+                                    <div className="flex items-center gap-1.5 font-medium">
+                                        {isSplitValid ? (
+                                            <>
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                <span>Total Allocated: {splitTotal.toFixed(2)} Tk (Matched)</span>
+                                            </>
+                                        ) : splitDiff > 0 ? (
+                                            <>
+                                                <AlertCircle className="w-4 h-4 text-amber-600" />
+                                                <span>Remaining to allocate: {splitDiff.toFixed(2)} Tk</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <AlertCircle className="w-4 h-4 text-rose-600" />
+                                                <span>Over-allocated by {Math.abs(splitDiff).toFixed(2)} Tk</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    {!isSplitValid && splitDiff > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const lastIdx = data.payment_splits.length - 1;
+                                                const currentAmt = parseFloat(data.payment_splits[lastIdx].amount) || 0;
+                                                updateSplit(lastIdx, 'amount', (currentAmt + splitDiff).toFixed(2));
+                                            }}
+                                            className="text-[11px] underline font-bold hover:text-amber-900 cursor-pointer"
+                                        >
+                                            Auto-fill Remaining
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Submit & Generate Invoice */}
-                            <Button
-                                type="submit"
-                                variant="primary"
-                                size="lg"
-                                loading={processing}
-                                disabled={selectedTreatments.length === 0}
-                                className="w-full font-bold shadow-md shadow-teal-600/30"
-                            >
-                                <CreditCard className="w-5 h-5 mr-2" /> Collect Payment & Print Invoice
-                            </Button>
+                            {can('create-pos-treatment') ? (
+                                <Button
+                                    type="submit"
+                                    variant="primary"
+                                    size="lg"
+                                    loading={processing}
+                                    disabled={selectedTreatments.length === 0 || !isSplitValid}
+                                    className="w-full font-bold shadow-md shadow-teal-600/30"
+                                >
+                                    <CreditCard className="w-5 h-5 mr-2" /> Collect Payment & Print Invoice
+                                </Button>
+                            ) : (
+                                <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-500 font-semibold">
+                                    View-only mode. "create-pos-treatment" permission required to bill procedures.
+                                </div>
+                            )}
                         </form>
                     </Card>
 
@@ -504,8 +770,26 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
                                 {recentPayments.map((p) => (
                                     <div key={p.id} className="py-2.5 flex items-center justify-between text-xs">
                                         <div>
-                                            <span className="font-bold text-slate-900 block">{p.patient?.name}</span>
-                                            <span className="text-[11px] text-slate-400 font-mono">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] border border-slate-200">
+                                                    {p.invoice_number || `INV-TRT-${String(p.id).padStart(5, '0')}`}
+                                                </span>
+                                                {p.splits && p.splits.length > 1 ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                                        Split ({p.splits.length})
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 capitalize border border-slate-200">
+                                                        {p.payment_method === 'bank'
+                                                            ? `Bank: ${p.bank_account?.bank_name || 'Bank'}`
+                                                            : p.payment_method === 'mobile_banking'
+                                                            ? `Mobile: ${p.bank_account?.bank_name || p.bank_account?.account_name || 'Mobile'}`
+                                                            : 'Cash'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="font-bold text-slate-900 block mt-1">{p.patient?.name}</span>
+                                            <span className="text-[11px] text-teal-800 font-bold font-mono">
                                                 Paid: {parseFloat(p.final_paid_amount).toFixed(2)} Tk
                                             </span>
                                         </div>
@@ -513,14 +797,31 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
                                             variant="secondary"
                                             size="sm"
                                             onClick={() => {
+                                                const firstPt = p.patient_treatments?.[0];
                                                 setActiveInvoice({
                                                     id: p.id,
-                                                    invoice_no: `INV-TRT-${String(p.id).padStart(5, '0')}`,
+                                                    invoice_no: p.invoice_number || `INV-TRT-${String(p.id).padStart(5, '0')}`,
+                                                    token_number: firstPt?.token_number,
+                                                    payment_method: p.payment_method || 'cash',
+                                                    bank_account_name: p.bank_account ? (p.bank_account.bank_name || p.bank_account.account_name) : null,
+                                                    bank_account_number: p.bank_account?.account_number,
+                                                    payment_splits: p.splits?.map((s) => ({
+                                                        payment_method: s.payment_method,
+                                                        amount: s.amount,
+                                                        bank_name: s.bank_account?.bank_name || s.bank_account?.account_name,
+                                                        account_number: s.bank_account?.account_number,
+                                                    })) || [],
                                                     date: p.payment_date,
                                                     patient: {
+                                                        user_code: p.patient?.user_code,
                                                         name: p.patient?.name,
                                                         phone: p.patient?.phone,
                                                     },
+                                                    items: p.patient_treatments?.map((pt) => ({
+                                                        name: pt.treatment?.name,
+                                                        price: pt.treatment?.price,
+                                                        room_number: pt.treatment?.room?.room_number,
+                                                    })) || [],
                                                     base_amount: p.base_amount,
                                                     discount_type: p.discount_type,
                                                     discount_amount: p.discount_amount,
@@ -537,6 +838,14 @@ export default function PosTreatment({ categories = [], recentPayments = [], tod
                     </Card>
                 </div>
             </div>
+
+
+
+
+
+
+
+
 
             {/* Printable POS Invoice Modal */}
             {activeInvoice && (

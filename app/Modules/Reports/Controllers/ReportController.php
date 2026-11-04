@@ -163,7 +163,7 @@ class ReportController extends Controller
 
     private function getPaymentReport(Request $request, string $startDate, string $endDate): array
     {
-        $query = Payment::with(['patient', 'collectedBy'])
+        $query = Payment::with(['patient', 'collectedBy', 'bankAccount', 'splits.bankAccount', 'visit.doctor.doctorProfile', 'patientTreatments.treatment.room'])
             ->whereBetween('payment_date', [$startDate, $endDate]);
 
         if ($request->filled('patient_id')) {
@@ -172,6 +172,10 @@ class ReportController extends Controller
 
         if ($request->filled('payment_type')) {
             $query->where('payment_type', $request->string('payment_type'));
+        }
+
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', $request->string('payment_method'));
         }
 
         $records = $query->orderBy('payment_date', 'desc')->get();

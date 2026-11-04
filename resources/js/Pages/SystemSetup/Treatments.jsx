@@ -11,9 +11,11 @@ import ConfirmModal from '../../Components/Modal/ConfirmModal';
 import TextInput from '../../Components/Form/TextInput';
 import SelectInput from '../../Components/Form/SelectInput';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import { Layers, Plus, Edit2, Trash2, FolderPlus, Sparkles, Check, X, DoorOpen } from 'lucide-react';
 
 export default function Treatments({ categories = [], treatments = [], rooms = [] }) {
+    const { can } = usePermissions();
     const [activeTab, setActiveTab] = useState('treatments'); // 'treatments' | 'categories'
 
     // Category Modal state
@@ -148,12 +150,16 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
                 subtitle="Manage available clinic procedures, laser therapies, pricing, and category grouping"
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="secondary" onClick={openCreateCategory}>
-                            <FolderPlus className="w-4 h-4 mr-1.5" /> Add Category
-                        </Button>
-                        <Button variant="primary" onClick={openCreateTreatment}>
-                            <Plus className="w-4 h-4 mr-1.5" /> Add Treatment
-                        </Button>
+                        {can('create-treatments') && (
+                            <>
+                                <Button variant="secondary" onClick={openCreateCategory}>
+                                    <FolderPlus className="w-4 h-4 mr-1.5" /> Add Category
+                                </Button>
+                                <Button variant="primary" onClick={openCreateTreatment}>
+                                    <Plus className="w-4 h-4 mr-1.5" /> Add Treatment
+                                </Button>
+                            </>
+                        )}
                     </div>
                 }
             />
@@ -265,20 +271,29 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
                                         </Td>
                                         <Td align="right">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => openEditTreatment(t)}
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </Button>
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => setDeletingTreatmentId(t.id)}
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </Button>
+                                                {can('edit-treatments') && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => openEditTreatment(t)}
+                                                        title="Edit Treatment"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {can('delete-treatments') && (
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => setDeletingTreatmentId(t.id)}
+                                                        title="Delete Treatment"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {!can('edit-treatments') && !can('delete-treatments') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
                                             </div>
                                         </Td>
                                     </Tr>
@@ -337,20 +352,29 @@ export default function Treatments({ categories = [], treatments = [], rooms = [
                                         </Td>
                                         <Td align="right">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => openEditCategory(cat)}
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </Button>
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => setDeletingCatId(cat.id)}
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </Button>
+                                                {can('edit-treatments') && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => openEditCategory(cat)}
+                                                        title="Edit Category"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {can('delete-treatments') && (
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => setDeletingCatId(cat.id)}
+                                                        title="Delete Category"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {!can('edit-treatments') && !can('delete-treatments') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
                                             </div>
                                         </Td>
                                     </Tr>

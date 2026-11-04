@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CompanySetting;
 use App\Models\FollowUp;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -43,6 +44,7 @@ class SendWhatsAppReminders extends Command
             return self::SUCCESS;
         }
 
+        $setting = CompanySetting::getSettings();
         $sentCount = 0;
         foreach ($followUps as $followUp) {
             $patient = $followUp->patient;
@@ -51,7 +53,7 @@ class SendWhatsAppReminders extends Command
             $patientName = $patient?->name ?: 'Valued Patient';
             $phone = $patient?->phone;
 
-            $message = "Hello {$patientName}, this is a reminder from our Clinic. Your scheduled follow-up consultation with {$doctorName} is tomorrow ({$targetDate}). Please visit on time. Thank you!";
+            $message = $setting->formatWhatsAppMessage($patientName, $doctorName, $targetDate);
 
             // Log notification / trigger WhatsApp gateway
             Log::info("WhatsApp reminder dispatched to {$phone}: {$message}");

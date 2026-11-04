@@ -11,9 +11,11 @@ import ConfirmModal from '../../Components/Modal/ConfirmModal';
 import TextInput from '../../Components/Form/TextInput';
 import Textarea from '../../Components/Form/Textarea';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import { DoorOpen, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
 
 export default function Rooms({ rooms = [] }) {
+    const { can } = usePermissions();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRoom, setEditingRoom] = useState(null);
     const [deletingRoomId, setDeletingRoomId] = useState(null);
@@ -77,9 +79,11 @@ export default function Rooms({ rooms = [] }) {
                 title="Room Setup & Management"
                 subtitle="Configure consultation and procedure rooms, descriptions, and operational status"
                 actions={
-                    <Button variant="primary" onClick={openCreateModal}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Add New Room
-                    </Button>
+                    can('create-rooms') && (
+                        <Button variant="primary" onClick={openCreateModal}>
+                            <Plus className="w-4 h-4 mr-1.5" /> Add New Room
+                        </Button>
+                    )
                 }
             />
 
@@ -90,9 +94,11 @@ export default function Rooms({ rooms = [] }) {
                         title="No rooms added yet"
                         description="Create your clinic's consultation and treatment rooms to organize daily operations."
                         action={
-                            <Button variant="primary" size="sm" onClick={openCreateModal}>
-                                <Plus className="w-4 h-4 mr-1.5" /> Add Room
-                            </Button>
+                            can('create-rooms') && (
+                                <Button variant="primary" size="sm" onClick={openCreateModal}>
+                                    <Plus className="w-4 h-4 mr-1.5" /> Add Room
+                                </Button>
+                            )
                         }
                     />
                 ) : (
@@ -147,20 +153,29 @@ export default function Rooms({ rooms = [] }) {
                                         </Td>
                                         <Td align="right">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => openEditModal(room)}
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </Button>
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => setDeletingRoomId(room.id)}
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </Button>
+                                                {can('edit-rooms') && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => openEditModal(room)}
+                                                        title="Edit Room"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {can('delete-rooms') && (
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => setDeletingRoomId(room.id)}
+                                                        title="Delete Room"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {!can('edit-rooms') && !can('delete-rooms') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
                                             </div>
                                         </Td>
                                     </Tr>

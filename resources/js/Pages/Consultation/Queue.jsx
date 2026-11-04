@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { router, Link } from '@inertiajs/react';
+import { router, Link, useForm } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/UI/PageHeader';
 import Card from '../../Components/UI/Card';
@@ -8,7 +8,9 @@ import Badge from '../../Components/UI/Badge';
 import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../../Components/Table';
 import Modal from '../../Components/Modal/Modal';
 import TextInput from '../../Components/Form/TextInput';
+import SelectInput from '../../Components/Form/SelectInput';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import {
     Users,
     Clock,
@@ -20,6 +22,8 @@ import {
     Sparkles,
     DoorOpen,
     CreditCard,
+    Pencil,
+    Trash2,
 } from 'lucide-react';
 
 export default function Queue({
@@ -27,9 +31,11 @@ export default function Queue({
     doctors = [],
     selectedDoctorId,
     treatmentQueue = [],
+    allTreatments = [],
     today,
     activeTab: initialActiveTab = 'visits',
 }) {
+    const { can } = usePermissions();
     const [activeTab, setActiveTab] = useState(initialActiveTab || 'visits');
 
     // Visit queue filter state
@@ -39,8 +45,39 @@ export default function Queue({
     const [completeVisitOnPrescribe, setCompleteVisitOnPrescribe] = useState(true);
     const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
 
-    // Treatment queue filter state
+    // Treatment queue filter state & edit/delete modal
     const [treatmentStatusFilter, setTreatmentStatusFilter] = useState('all');
+    const [editingTreatment, setEditingTreatment] = useState(null);
+
+    const editForm = useForm({
+        treatment_id: '',
+        status: 'waiting',
+        date_administered: '',
+    });
+
+    const openEditModal = (item) => {
+        setEditingTreatment(item);
+        editForm.setData({
+            treatment_id: item.treatment_id || item.treatment?.id || '',
+            status: item.status || 'waiting',
+            date_administered: item.date_administered || today || new Date().toISOString().split('T')[0],
+        });
+    };
+
+    const handleUpdateRecord = (e) => {
+        e.preventDefault();
+        if (!editingTreatment) return;
+        editForm.put(`/consultation/treatments/${editingTreatment.id}`, {
+            preserveScroll: true,
+            onSuccess: () => setEditingTreatment(null),
+        });
+    };
+
+    const handleDeleteRecord = (id, token) => {
+        if (confirm(`Are you sure you want to delete treatment record ${token || '#' + id}? This will remove it from the patient queue.`)) {
+            router.delete(`/consultation/treatments/${id}`, { preserveScroll: true });
+        }
+    };
 
     const handleDoctorFilter = (e) => {
         const docId = e.target.value;
@@ -285,7 +322,7 @@ export default function Queue({
                                             </Td>
                                             <Td align="right">
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    {visit.status === 'waiting' && (
+                                                    {visit.status === 'waiting' && can('call-patient') && (
                                                         <Button
                                                             variant="primary"
                                                             size="sm"
@@ -297,20 +334,24 @@ export default function Queue({
 
                                                     {visit.status === 'in_consultation' && (
                                                         <>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => openPrescribeModal(visit)}
-                                                            >
-                                                                <Calendar className="w-3.5 h-3.5 mr-1" /> Prescribe Follow-Up
-                                                            </Button>
-                                                            <Button
-                                                                variant="success"
-                                                                size="sm"
-                                                                onClick={() => handleVisitStatusUpdate(visit.id, 'completed')}
-                                                            >
-                                                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Done
-                                                            </Button>
+                                                            {can('update-consultation-room') && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => openPrescribeModal(visit)}
+                                                                >
+                                                                    <Calendar className="w-3.5 h-3.5 mr-1" /> Prescribe Follow-Up
+                                                                </Button>
+                                                            )}
+                                                            {(can('update-consultation-queue') || can('call-patient')) && (
+                                                                <Button
+                                                                    variant="success"
+                                                                    size="sm"
+                                                                    onClick={() => handleVisitStatusUpdate(visit.id, 'completed')}
+                                                                >
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Done
+                                                                </Button>
+                                                            )}
                                                         </>
                                                     )}
 
@@ -320,7 +361,7 @@ export default function Queue({
                                                         </span>
                                                     )}
 
-                                                    {visit.status !== 'cancelled' && visit.status !== 'completed' && (
+                                                    {visit.status !== 'cancelled' && visit.status !== 'completed' && can('cancel-serial') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -330,6 +371,10 @@ export default function Queue({
                                                         >
                                                             <XCircle className="w-4 h-4" />
                                                         </Button>
+                                                    )}
+
+                                                    {visit.status === 'waiting' && !can('call-patient') && !can('cancel-serial') && (
+                                                        <span className="text-xs text-slate-400">View Only</span>
                                                     )}
                                                 </div>
                                             </Td>
@@ -398,17 +443,14 @@ export default function Queue({
                                 description="Select another status or record treatments from the Treatment POS."
                             />
                         ) : (
-                            <Table>
+                            <Table className="w-full">
                                 <Thead>
                                     <Tr>
-                                        <Th className="w-28">Token #</Th>
-                                        <Th>Patient Name</Th>
-                                        <Th>Contact</Th>
-                                        <Th>Treatment / Procedure</Th>
-                                        <Th className="w-36">Category</Th>
-                                        <Th>Room</Th>
-                                        <Th>Status</Th>
-                                        <Th align="right">Workflow Actions</Th>
+                                        <Th className="w-24">Token #</Th>
+                                        <Th className="w-48">Patient</Th>
+                                        <Th>Procedure & Room</Th>
+                                        <Th className="w-36">Status</Th>
+                                        <Th align="right">Workflow & Actions</Th>
                                     </Tr>
                                 </Thead>
                                 <Tbody>
@@ -417,95 +459,124 @@ export default function Queue({
                                         return (
                                             <Tr
                                                 key={item.id}
-                                                style={rowColor ? { backgroundColor: `${rowColor}10`, borderLeft: `4px solid ${rowColor}` } : undefined}
+                                                style={rowColor ? { backgroundColor: `${rowColor}08`, borderLeft: `3px solid ${rowColor}` } : undefined}
                                             >
-                                                <Td style={rowColor ? { borderLeft: `4px solid ${rowColor}` } : undefined}>
+                                                <Td>
                                                     <span className="inline-block px-2.5 py-1 rounded bg-teal-50 text-teal-900 font-mono text-xs font-black border border-teal-200">
                                                         {item.token_number || `#${item.id}`}
                                                     </span>
                                                 </Td>
                                                 <Td className="whitespace-normal">
-                                                    <span className="font-bold text-slate-900 block">
+                                                    <span className="font-bold text-slate-900 block text-xs">
                                                         {item.patient?.name || 'Walk-in Patient'}
                                                     </span>
-                                                    <span className="text-[11px] text-slate-400">ID: {item.patient?.user_code || `PT-${item.patient_id}`}</span>
-                                                </Td>
-                                                <Td>
-                                                    <span className="font-mono text-xs text-slate-600">{item.patient?.phone || '—'}</span>
-                                                </Td>
-                                                <Td className="whitespace-normal max-w-[200px]">
-                                                    <div className="flex items-center gap-2">
-                                                        {rowColor && (
-                                                            <span
-                                                                className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-300 shadow-2xs"
-                                                                style={{ backgroundColor: rowColor }}
-                                                                title={`Color: ${rowColor}`}
-                                                            />
-                                                        )}
-                                                        <span className="font-bold text-slate-800 text-sm block">
-                                                            {item.treatment?.name || 'Procedure'}
-                                                        </span>
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono mt-0.5">
+                                                        <span>ID: {item.patient?.user_code || `PT-${item.patient_id}`}</span>
+                                                        {item.patient?.phone && <span>• {item.patient.phone}</span>}
                                                     </div>
                                                 </Td>
-                                            <Td className="whitespace-normal max-w-[140px]">
-                                                <Badge
-                                                    variant="treatment"
-                                                    className="whitespace-normal break-words text-left leading-snug rounded-lg py-1 px-2.5 inline-block"
-                                                >
-                                                    {item.treatment?.category?.name || 'General'}
-                                                </Badge>
-                                            </Td>
-                                            <Td>
-                                                {item.treatment?.room ? (
-                                                    <Badge variant="info">
-                                                        <DoorOpen className="w-3 h-3 mr-1" />
-                                                        {item.treatment.room.room_number}
+                                                <Td className="whitespace-normal">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            {rowColor && (
+                                                                <span
+                                                                    className="w-3 h-3 rounded-full shrink-0 border border-slate-300 shadow-2xs"
+                                                                    style={{ backgroundColor: rowColor }}
+                                                                    title={`Color: ${rowColor}`}
+                                                                />
+                                                            )}
+                                                            <span className="font-bold text-slate-800 text-xs">
+                                                                {item.treatment?.name || 'Procedure'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                                                            <span className="text-slate-500 font-medium">
+                                                                {item.treatment?.category?.name || 'General'}
+                                                            </span>
+                                                            {item.treatment?.room && (
+                                                                <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">
+                                                                    <DoorOpen className="w-3 h-3 text-slate-500" />
+                                                                    {item.treatment.room.room_number}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </Td>
+                                                <Td className="whitespace-normal">
+                                                    <Badge variant={item.status}>
+                                                        {item.status === 'in_collection'
+                                                            ? 'In Collection'
+                                                            : item.status === 'sample'
+                                                            ? 'Sample (Done)'
+                                                            : 'Waiting'}
                                                     </Badge>
-                                                ) : (
-                                                    <span className="text-xs text-slate-400">—</span>
-                                                )}
-                                            </Td>
-                                            <Td>
-                                                <Badge variant={item.status}>
-                                                    {item.status === 'in_collection'
-                                                        ? 'In Collection'
-                                                        : item.status === 'sample'
-                                                        ? 'Sample (Done)'
-                                                        : 'Waiting'}
-                                                </Badge>
-                                            </Td>
-                                            <Td align="right">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    {item.status === 'waiting' && (
-                                                        <Button
-                                                            variant="primary"
-                                                            size="sm"
-                                                            onClick={() => handleTreatmentStatusUpdate(item.id, 'in_collection')}
-                                                        >
-                                                            <Clock className="w-3.5 h-3.5 mr-1" /> In Collection
-                                                        </Button>
-                                                    )}
+                                                </Td>
+                                                <Td align="right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        {item.status === 'waiting' && can('in-collection') && (
+                                                            <Button
+                                                                variant="primary"
+                                                                size="xs"
+                                                                onClick={() => handleTreatmentStatusUpdate(item.id, 'in_collection')}
+                                                            >
+                                                                <Clock className="w-3.5 h-3.5 mr-1" /> In Collection
+                                                            </Button>
+                                                        )}
 
-                                                    {item.status === 'in_collection' && (
-                                                        <Button
-                                                            variant="success"
-                                                            size="sm"
-                                                            onClick={() => handleTreatmentStatusUpdate(item.id, 'sample')}
-                                                        >
-                                                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Sample (Done)
-                                                        </Button>
-                                                    )}
+                                                        {item.status === 'in_collection' && can('sample') && (
+                                                            <Button
+                                                                variant="success"
+                                                                size="xs"
+                                                                onClick={() => handleTreatmentStatusUpdate(item.id, 'sample')}
+                                                            >
+                                                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Sample (Done)
+                                                            </Button>
+                                                        )}
 
-                                                    {item.status === 'sample' && (
-                                                        <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Treatment Done
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </Td>
-                                        </Tr>
-                                    );
-                                })}
+                                                        {item.status === 'sample' && (
+                                                            <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                                                <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                                                            </span>
+                                                        )}
+
+                                                        {item.status === 'waiting' && !can('in-collection') && (
+                                                            <span className="text-xs text-slate-400">View Only</span>
+                                                        )}
+
+                                                        {item.status === 'in_collection' && !can('sample') && (
+                                                            <span className="text-xs text-slate-400">In Progress</span>
+                                                        )}
+
+                                                        {/* Edit Record */}
+                                                        {(can('update-consultation-queue') || can('edit-consultation-queue') || can('edit-pos-treatment')) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="xs"
+                                                                onClick={() => openEditModal(item)}
+                                                                title="Edit Treatment Record"
+                                                                className="text-teal-700 border-teal-300 hover:bg-teal-50 ml-1"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        )}
+
+                                                        {/* Delete Record */}
+                                                        {(can('delete-consultation-queue') || can('delete-pos-treatment')) && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="xs"
+                                                                onClick={() => handleDeleteRecord(item.id, item.token_number)}
+                                                                title="Delete Treatment Record"
+                                                                className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </Td>
+                                            </Tr>
+                                        );
+                                    })}
                                 </Tbody>
                             </Table>
                         )}
@@ -550,6 +621,94 @@ export default function Queue({
                             </Button>
                             <Button variant="primary" type="submit" loading={submittingFollowUp}>
                                 Save Follow-Up
+                            </Button>
+                        </div>
+                    </form>
+                )}
+            </Modal>
+
+            {/* Modal: Edit Patient Treatment Record */}
+            <Modal
+                isOpen={!!editingTreatment}
+                onClose={() => setEditingTreatment(null)}
+                title="Edit Patient Treatment Record"
+            >
+                {editingTreatment && (
+                    <form onSubmit={handleUpdateRecord} className="space-y-4">
+                        {/* Read-only Patient & Token Summary */}
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-800">
+                                    Patient: {editingTreatment.patient?.name || 'Walk-in Patient'}
+                                </span>
+                                <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                                    {editingTreatment.token_number || `#${editingTreatment.id}`}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                <span>Phone: {editingTreatment.patient?.phone || '—'}</span>
+                                {editingTreatment.patient?.user_code && (
+                                    <span className="font-mono">ID: {editingTreatment.patient.user_code}</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Treatment Procedure Select */}
+                        <SelectInput
+                            label="Treatment Procedure"
+                            value={editForm.data.treatment_id}
+                            onChange={(e) => editForm.setData('treatment_id', e.target.value)}
+                            error={editForm.errors.treatment_id}
+                            required
+                        >
+                            <option value="">-- Choose Treatment --</option>
+                            {allTreatments.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                    {t.name} ({parseFloat(t.price).toFixed(0)} Tk) - {t.category?.name || 'General'}
+                                </option>
+                            ))}
+                        </SelectInput>
+
+                        {/* Status Select */}
+                        <SelectInput
+                            label="Procedure Progress Status"
+                            value={editForm.data.status}
+                            onChange={(e) => editForm.setData('status', e.target.value)}
+                            error={editForm.errors.status}
+                            required
+                        >
+                            <option value="waiting">Waiting</option>
+                            <option value="in_collection">In Collection</option>
+                            <option value="sample">Sample (Done)</option>
+                        </SelectInput>
+
+                        {/* Date Administered */}
+                        <TextInput
+                            label="Date Administered"
+                            type="date"
+                            value={editForm.data.date_administered}
+                            onChange={(e) => editForm.setData('date_administered', e.target.value)}
+                            error={editForm.errors.date_administered}
+                            required
+                        />
+
+                        {/* Form Actions */}
+                        <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setEditingTreatment(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                size="sm"
+                                loading={editForm.processing}
+                            >
+                                Save Changes
                             </Button>
                         </div>
                     </form>

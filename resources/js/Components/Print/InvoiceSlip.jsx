@@ -170,10 +170,37 @@ export default function InvoiceSlip({ invoice, onClose }) {
                                 <span className="text-slate-500">Phone:</span>
                                 <span className="font-mono text-slate-700">{invoice.patient?.phone}</span>
                             </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Payment:</span>
-                                <span className="font-medium text-slate-800">Cash / POS</span>
-                            </div>
+                            {invoice.payment_splits && invoice.payment_splits.length > 1 ? (
+                                <div className="pt-1 border-t border-dashed border-slate-200">
+                                    <span className="text-slate-500 font-medium block mb-1">Paid via (Split):</span>
+                                    <div className="space-y-1 pl-1 mb-1">
+                                        {invoice.payment_splits.map((s, idx) => {
+                                            const label = s.payment_method === 'bank'
+                                                ? `Bank: ${s.bank_name || 'Bank'}${s.account_number ? ' (' + s.account_number + ')' : ''}`
+                                                : s.payment_method === 'mobile_banking'
+                                                ? `Mobile: ${s.bank_name || 'Mobile'}${s.account_number ? ' (' + s.account_number + ')' : ''}`
+                                                : 'Cash';
+                                            return (
+                                                <div key={idx} className="flex justify-between text-[10px]">
+                                                    <span className="text-slate-600 font-medium">• {label}</span>
+                                                    <span className="font-mono font-semibold text-slate-800">{parseFloat(s.amount).toFixed(2)} Tk</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Payment:</span>
+                                    <span className="font-semibold text-slate-800 capitalize">
+                                        {invoice.payment_method === 'bank'
+                                            ? `Bank (${invoice.bank_account_name || 'Bank'}${invoice.bank_account_number ? ' - ' + invoice.bank_account_number : ''})`
+                                            : invoice.payment_method === 'mobile_banking'
+                                            ? `Mobile (${invoice.bank_account_name || 'Mobile Banking'}${invoice.bank_account_number ? ' - ' + invoice.bank_account_number : ''})`
+                                            : 'Cash / POS'}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Itemized Services Table */}
@@ -186,14 +213,26 @@ export default function InvoiceSlip({ invoice, onClose }) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {invoice.items && invoice.items.map((item, idx) => (
-                                        <tr key={idx}>
-                                            <td className="py-1 text-slate-800 font-medium">{item.name}</td>
-                                            <td className="py-1 text-right font-mono font-semibold text-slate-900">
-                                                {parseFloat(item.price).toFixed(2)}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {invoice.items && invoice.items.map((item, idx) => {
+                                        const roomNo = item.room_number || item.room?.room_number || item.treatment?.room?.room_number;
+                                        return (
+                                            <tr key={idx}>
+                                                <td className="py-1 text-slate-800 font-medium">
+                                                    <div>
+                                                        <span>{item.name}</span>
+                                                        {roomNo && (
+                                                            <span className="text-[10px] text-slate-500 font-normal ml-1 print:text-black">
+                                                                (Room: {roomNo})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="py-1 text-right font-mono font-semibold text-slate-900 align-top">
+                                                    {parseFloat(item.price).toFixed(2)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

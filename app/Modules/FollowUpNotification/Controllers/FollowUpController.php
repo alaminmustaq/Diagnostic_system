@@ -25,26 +25,50 @@ class FollowUpController extends Controller
             $query->where('doctor_id', $request->integer('doctor_id'));
         }
 
+        if ($request->filled('patient_id')) {
+            $query->where('patient_id', $request->integer('patient_id'));
+        }
+
+        if ($request->filled('patient_search')) {
+            $search = trim($request->string('patient_search'));
+            $query->whereHas('patient', function ($pq) use ($search) {
+                $pq->where('name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('user_code', 'like', "%{$search}%");
+            });
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
 
-        if ($request->filled('date_filter')) {
-            $filter = $request->string('date_filter');
-            if ($filter === 'today') {
-                $query->whereDate('follow_up_date', $today);
-            } elseif ($filter === 'tomorrow') {
-                $query->whereDate('follow_up_date', $tomorrow);
-            } elseif ($filter === 'upcoming_week') {
-                $query->whereBetween('follow_up_date', [$today, Carbon::today()->addDays(7)->toDateString()]);
+        $dateFilter = $request->string('date_filter');
+
+        if ($dateFilter === 'today') {
+            $query->whereDate('follow_up_date', $today);
+        } elseif ($dateFilter === 'tomorrow') {
+            $query->whereDate('follow_up_date', $tomorrow);
+        } elseif ($dateFilter === 'upcoming_week') {
+            $query->whereBetween('follow_up_date', [$today, Carbon::today()->addDays(7)->toDateString()]);
+        } elseif ($dateFilter === 'this_month') {
+            $query->whereBetween('follow_up_date', [Carbon::today()->startOfMonth()->toDateString(), Carbon::today()->endOfMonth()->toDateString()]);
+        } else {
+            if ($request->filled('from_date')) {
+                $query->whereDate('follow_up_date', '>=', $request->input('from_date'));
             }
-        } elseif ($request->filled('from_date') && $request->filled('to_date')) {
-            $query->whereBetween('follow_up_date', [$request->input('from_date'), $request->input('to_date')]);
+            if ($request->filled('to_date')) {
+                $query->whereDate('follow_up_date', '<=', $request->input('to_date'));
+            }
         }
 
         $followUps = $query->orderBy('follow_up_date', 'asc')->get();
 
         $doctors = User::with('doctorProfile')->where('role', 'doctor')->get();
+
+        $patients = User::where('role', 'patient')
+            ->orderBy('name')
+            ->take(200)
+            ->get(['id', 'name', 'phone', 'user_code']);
 
         $summary = [
             'total_pending' => FollowUp::where('status', 'pending')->count(),
@@ -58,8 +82,9 @@ class FollowUpController extends Controller
         return Inertia::render('FollowUps/Index', [
             'followUps' => $followUps,
             'doctors' => $doctors,
+            'patients' => $patients,
             'summary' => $summary,
-            'filters' => $request->only(['doctor_id', 'status', 'date_filter', 'from_date', 'to_date']),
+            'filters' => $request->only(['doctor_id', 'patient_id', 'patient_search', 'status', 'date_filter', 'from_date', 'to_date']),
             'today' => $today,
             'tomorrow' => $tomorrow,
         ]);
@@ -67,6 +92,10 @@ class FollowUpController extends Controller
 
     public function runDailyJob(Request $request): RedirectResponse
     {
+        if (!$request->user()->can('whatsapp-followup')) {
+            abort(403, 'Unauthorized action: You do not have permission to execute WhatsApp automated follow-ups.');
+        }
+
         $targetDate = $request->input('target_date', Carbon::tomorrow()->toDateString());
         
         Artisan::call('followups:send-reminders', [
@@ -78,8 +107,12 @@ class FollowUpController extends Controller
         return redirect()->back()->with('success', 'Automated WhatsApp job executed: ' . trim($output));
     }
 
-    public function markNotified(int $id): RedirectResponse
+    public function markNotified(Request $request, int $id): RedirectResponse
     {
+        if (!$request->user()->can('whatsapp-followup')) {
+            abort(403, 'Unauthorized action: You do not have permission to record WhatsApp notifications.');
+        }
+
         $followUp = FollowUp::findOrFail($id);
         $followUp->update(['is_notified' => true]);
 

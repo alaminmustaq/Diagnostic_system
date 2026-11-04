@@ -18,6 +18,7 @@ class PatientTreatment extends Model
         'patient_id',
         'treatment_id',
         'payment_id',
+        'invoice_number',
         'serial_number',
         'token_number',
         'status',

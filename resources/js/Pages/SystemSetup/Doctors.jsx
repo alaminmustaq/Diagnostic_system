@@ -19,6 +19,7 @@ import ConfirmModal from "../../Components/Modal/ConfirmModal";
 import TextInput from "../../Components/Form/TextInput";
 import SelectInput from "../../Components/Form/SelectInput";
 import Textarea from "../../Components/Form/Textarea";
+import { usePermissions } from "../../Utils/permissions";
 import {
     UserCog,
     Plus,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 
 export default function Doctors({ doctors = [], rooms = [] }) {
+    const { can } = usePermissions();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingDoctor, setEditingDoctor] = useState(null);
     const [deletingDoctorId, setDeletingDoctorId] = useState(null);
@@ -109,9 +111,11 @@ export default function Doctors({ doctors = [], rooms = [] }) {
                 title="Doctor Setup & Staff Management"
                 subtitle="Configure doctors, designations, consultation rooms, and baseline consultation rates"
                 actions={
-                    <Button variant="primary" onClick={openCreateModal}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Add New Doctor
-                    </Button>
+                    can('create-doctors') && (
+                        <Button variant="primary" onClick={openCreateModal}>
+                            <Plus className="w-4 h-4 mr-1.5" /> Add New Doctor
+                        </Button>
+                    )
                 }
             />
 
@@ -122,13 +126,15 @@ export default function Doctors({ doctors = [], rooms = [] }) {
                         title="No doctors added yet"
                         description="Add your clinic's first doctor to begin scheduling patient serials."
                         action={
-                            <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={openCreateModal}
-                            >
-                                <Plus className="w-4 h-4 mr-1.5" /> Add Doctor
-                            </Button>
+                            can('create-doctors') && (
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={openCreateModal}
+                                >
+                                    <Plus className="w-4 h-4 mr-1.5" /> Add Doctor
+                                </Button>
+                            )
                         }
                     />
                 ) : (
@@ -194,26 +200,35 @@ export default function Doctors({ doctors = [], rooms = [] }) {
                                         </Td>
                                         <Td align="right">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        openEditModal(doctor)
-                                                    }
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </Button>
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setDeletingDoctorId(
-                                                            doctor.id,
-                                                        )
-                                                    }
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </Button>
+                                                {can('edit-doctors') && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            openEditModal(doctor)
+                                                        }
+                                                        title="Edit Doctor"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {can('delete-doctors') && (
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setDeletingDoctorId(
+                                                                doctor.id,
+                                                            )
+                                                        }
+                                                        title="Delete Doctor"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                )}
+                                                {!can('edit-doctors') && !can('delete-doctors') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
                                             </div>
                                         </Td>
                                     </Tr>

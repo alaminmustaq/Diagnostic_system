@@ -11,11 +11,13 @@ import ConfirmModal from '../../Components/Modal/ConfirmModal';
 import TextInput from '../../Components/Form/TextInput';
 import SelectInput from '../../Components/Form/SelectInput';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import { Smartphone, Plus, Edit2, Trash2, Search, Check, X, PhoneCall } from 'lucide-react';
 
 const COMMON_ACCOUNT_TYPES = ['Personal', 'Agent', 'Merchant'];
 
 export default function MobileBanking({ accounts = [] }) {
+    const { can } = usePermissions();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState(null);
@@ -103,9 +105,11 @@ export default function MobileBanking({ accounts = [] }) {
                 title="Mobile Banking Setup"
                 subtitle="Configure mobile financial services (bKash, Nagad, Rocket, Upay) accounts"
                 actions={
-                    <Button variant="primary" onClick={openCreateModal}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Add Mobile Banking
-                    </Button>
+                    can('create-mobile-banking') && (
+                        <Button variant="primary" onClick={openCreateModal}>
+                            <Plus className="w-4 h-4 mr-1.5" /> Add Mobile Banking
+                        </Button>
+                    )
                 }
             />
 
@@ -137,7 +141,7 @@ export default function MobileBanking({ accounts = [] }) {
                                 : 'Configure your mobile banking accounts (e.g. bKash, Nagad) to accept mobile payments.'
                         }
                         action={
-                            !searchTerm && (
+                            !searchTerm && can('create-mobile-banking') && (
                                 <Button variant="primary" size="sm" onClick={openCreateModal}>
                                     <Plus className="w-4 h-4 mr-1.5" /> Add Mobile Banking
                                 </Button>
@@ -208,24 +212,31 @@ export default function MobileBanking({ accounts = [] }) {
                                     </Td>
                                     <Td className="text-right">
                                         <div className="flex items-center justify-end gap-1.5">
-                                            <Button
-                                                variant="ghost"
-                                                size="xs"
-                                                onClick={() => openEditModal(account)}
-                                                className="text-slate-600 hover:text-teal-600"
-                                                title="Edit Account"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="xs"
-                                                onClick={() => setDeletingAccountId(account.id)}
-                                                className="text-slate-600 hover:text-rose-600"
-                                                title="Delete Account"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
+                                            {can('edit-mobile-banking') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() => openEditModal(account)}
+                                                    className="text-slate-600 hover:text-teal-600"
+                                                    title="Edit Account"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                            {can('delete-mobile-banking') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() => setDeletingAccountId(account.id)}
+                                                    className="text-slate-600 hover:text-rose-600"
+                                                    title="Delete Account"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                            {!can('edit-mobile-banking') && !can('delete-mobile-banking') && (
+                                                <span className="text-xs text-slate-400">View Only</span>
+                                            )}
                                         </div>
                                     </Td>
                                 </Tr>

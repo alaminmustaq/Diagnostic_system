@@ -9,6 +9,7 @@ import TextInput from '../../Components/Form/TextInput';
 import SelectInput from '../../Components/Form/SelectInput';
 import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../../Components/Table';
 import TokenSlip from '../../Components/Print/TokenSlip';
+import { usePermissions } from '../../Utils/permissions';
 import {
     Ticket,
     Phone,
@@ -22,9 +23,24 @@ import {
     Calendar,
     Search,
     Clock,
+    CreditCard,
+    Landmark,
+    Smartphone,
+    Banknote,
+    Plus,
+    Trash2,
+    Check,
 } from 'lucide-react';
 
-export default function SerialBooking({ doctors = [], recentVisits = [], today, lastBookedVisit }) {
+export default function SerialBooking({
+    doctors = [],
+    recentVisits = [],
+    bankAccounts = [],
+    mobileBankingAccounts = [],
+    today,
+    lastBookedVisit,
+}) {
+    const { can } = usePermissions();
     const [searchingPhone, setSearchingPhone] = useState(false);
     const [patientStatus, setPatientStatus] = useState(null); // { exists, has_prior_visits, pending_follow_up }
     const [activeSlip, setActiveSlip] = useState(lastBookedVisit || null);
@@ -33,16 +49,22 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
     const searchContainerRef = useRef(null);
 
     const defaultDoctor = doctors.length > 0 ? doctors[0] : null;
+    const initialRate = defaultDoctor?.doctor_profile?.default_visit_rate || '1000.00';
 
     const { data, setData, post, processing, errors, reset } = useForm({
         phone: '',
         name: '',
         doctor_id: defaultDoctor ? defaultDoctor.id : '',
         visit_date: today,
-        base_amount: defaultDoctor?.doctor_profile?.default_visit_rate || '1000.00',
+        base_amount: initialRate,
         discount_type: '',
         discount_amount: '0.00',
-        final_paid_amount: defaultDoctor?.doctor_profile?.default_visit_rate || '1000.00',
+        final_paid_amount: initialRate,
+        payment_method: 'cash',
+        bank_account_id: '',
+        payment_splits: [
+            { payment_method: 'cash', bank_account_id: '', amount: initialRate },
+        ],
     });
 
     // When lastBookedVisit changes from session flash, open slip
@@ -63,6 +85,56 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Split payment helpers
+    const splitTotal = (data.payment_splits || []).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    const netPayable = parseFloat(data.final_paid_amount) || 0;
+    const splitDiff = Math.round((netPayable - splitTotal) * 100) / 100;
+    const isSplitValid = netPayable === 0 || Math.abs(splitDiff) < 0.01;
+
+    const updateSplit = (index, field, value) => {
+        setData((prev) => {
+            const nextSplits = [...prev.payment_splits];
+            nextSplits[index] = { ...nextSplits[index], [field]: value };
+            if (field === 'payment_method' && value === 'cash') {
+                nextSplits[index].bank_account_id = '';
+            } else if (field === 'payment_method' && value === 'bank' && !nextSplits[index].bank_account_id) {
+                nextSplits[index].bank_account_id = bankAccounts[0]?.id || '';
+            } else if (field === 'payment_method' && value === 'mobile_banking' && !nextSplits[index].bank_account_id) {
+                nextSplits[index].bank_account_id = mobileBankingAccounts[0]?.id || '';
+            }
+            return { ...prev, payment_splits: nextSplits };
+        });
+    };
+
+    const addSplitRow = () => {
+        setData((prev) => {
+            const currentSum = (prev.payment_splits || []).reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+            const remaining = Math.max(0, (parseFloat(prev.final_paid_amount) || 0) - currentSum);
+            const defaultMethod = bankAccounts.length > 0 ? 'bank' : (mobileBankingAccounts.length > 0 ? 'mobile_banking' : 'cash');
+            const defaultBankId = defaultMethod === 'bank' ? (bankAccounts[0]?.id || '') : (defaultMethod === 'mobile_banking' ? (mobileBankingAccounts[0]?.id || '') : '');
+
+            return {
+                ...prev,
+                payment_splits: [
+                    ...prev.payment_splits,
+                    {
+                        payment_method: defaultMethod,
+                        bank_account_id: defaultBankId,
+                        amount: remaining > 0 ? remaining.toFixed(2) : '0.00',
+                    },
+                ],
+            };
+        });
+    };
+
+    const removeSplitRow = (index) => {
+        setData((prev) => {
+            if (prev.payment_splits.length <= 1) return prev;
+            const nextSplits = prev.payment_splits.filter((_, idx) => idx !== index);
+            return { ...prev, payment_splits: nextSplits };
+        });
+    };
+
     // Recalculate billing when doctor or discount changes
     const recalculateFee = (selectedDocId, discountType, discountAmt) => {
         const doc = doctors.find((d) => d.id === parseInt(selectedDocId));
@@ -77,11 +149,24 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
             finalAmount = Math.max(0, baseRate - discValue);
         }
 
-        setData((prev) => ({
-            ...prev,
-            base_amount: baseRate.toFixed(2),
-            final_paid_amount: finalAmount.toFixed(2),
-        }));
+        const formattedFinal = finalAmount.toFixed(2);
+
+        setData((prev) => {
+            const nextSplits = [...(prev.payment_splits || [])];
+            if (nextSplits.length <= 1) {
+                nextSplits[0] = {
+                    payment_method: nextSplits[0]?.payment_method || 'cash',
+                    bank_account_id: nextSplits[0]?.bank_account_id || '',
+                    amount: formattedFinal,
+                };
+            }
+            return {
+                ...prev,
+                base_amount: baseRate.toFixed(2),
+                final_paid_amount: formattedFinal,
+                payment_splits: nextSplits,
+            };
+        });
     };
 
     // Live search as user types
@@ -410,10 +495,20 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                                 } else if (prev.discount_type === 'fixed') {
                                                     finalAmt = Math.max(0, base - disc);
                                                 }
+                                                const formatted = finalAmt.toFixed(2);
+                                                const nextSplits = [...(prev.payment_splits || [])];
+                                                if (nextSplits.length <= 1) {
+                                                    nextSplits[0] = {
+                                                        payment_method: nextSplits[0]?.payment_method || 'cash',
+                                                        bank_account_id: nextSplits[0]?.bank_account_id || '',
+                                                        amount: formatted,
+                                                    };
+                                                }
                                                 return {
                                                     ...prev,
                                                     base_amount: newBase,
-                                                    final_paid_amount: finalAmt.toFixed(2),
+                                                    final_paid_amount: formatted,
+                                                    payment_splits: nextSplits,
                                                 };
                                             });
                                         }}
@@ -445,19 +540,188 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                         {parseFloat(data.final_paid_amount).toFixed(2)} Tk
                                     </span>
                                 </div>
+
+                                {/* Payment Method & Split Allocation */}
+                                <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                                Payment Method & Split Allocation
+                                            </span>
+                                            <p className="text-[11px] text-slate-500">
+                                                Pay in single method or split across multiple Cash, Bank & Mobile accounts
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={addSplitRow}
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-lg border border-teal-200 transition cursor-pointer"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>Add Split</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {data.payment_splits.map((split, idx) => (
+                                            <div key={idx} className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center">
+                                                            #{idx + 1}
+                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            {[
+                                                                { id: 'cash', label: 'Cash', icon: Banknote },
+                                                                { id: 'bank', label: 'Bank', icon: Landmark },
+                                                                { id: 'mobile_banking', label: 'Mobile', icon: Smartphone },
+                                                            ].map((pm) => {
+                                                                const Icon = pm.icon;
+                                                                const isSelected = split.payment_method === pm.id;
+                                                                return (
+                                                                    <button
+                                                                        key={pm.id}
+                                                                        type="button"
+                                                                        onClick={() => updateSplit(idx, 'payment_method', pm.id)}
+                                                                        className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                                                                            isSelected
+                                                                                ? 'bg-teal-600 text-white shadow-2xs'
+                                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                                        }`}
+                                                                    >
+                                                                        <Icon className="w-3 h-3" />
+                                                                        <span>{pm.label}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {data.payment_splits.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeSplitRow(idx)}
+                                                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                            title="Remove split"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {split.payment_method === 'bank' ? (
+                                                        <SelectInput
+                                                            value={split.bank_account_id}
+                                                            onChange={(e) => updateSplit(idx, 'bank_account_id', e.target.value)}
+                                                            required
+                                                        >
+                                                            <option value="">-- Choose Bank Account --</option>
+                                                            {bankAccounts.map((b) => (
+                                                                <option key={b.id} value={b.id}>
+                                                                    {b.bank_name} - {b.account_number} ({b.account_name})
+                                                                </option>
+                                                            ))}
+                                                        </SelectInput>
+                                                    ) : split.payment_method === 'mobile_banking' ? (
+                                                        <SelectInput
+                                                            value={split.bank_account_id}
+                                                            onChange={(e) => updateSplit(idx, 'bank_account_id', e.target.value)}
+                                                            required
+                                                        >
+                                                            <option value="">-- Choose Mobile Banking --</option>
+                                                            {mobileBankingAccounts.map((m) => (
+                                                                <option key={m.id} value={m.id}>
+                                                                    {m.bank_name ? `${m.bank_name} - ` : ''}{m.account_number} ({m.account_type || 'Personal'}: {m.account_name})
+                                                                </option>
+                                                            ))}
+                                                        </SelectInput>
+                                                    ) : (
+                                                        <div className="flex items-center px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                                                            <Banknote className="w-4 h-4 text-emerald-600 mr-2" />
+                                                            Cash Counter Receipt
+                                                        </div>
+                                                    )}
+
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0.01"
+                                                            placeholder="Amount (Tk)"
+                                                            value={split.amount}
+                                                            onChange={(e) => updateSplit(idx, 'amount', e.target.value)}
+                                                            className="w-full pl-3 pr-8 py-2 text-sm font-mono font-bold rounded-lg border border-slate-300 text-slate-800 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                                            required
+                                                        />
+                                                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                                                            Tk
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Split Validation Banner */}
+                                    <div className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                                        isSplitValid
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                            : 'bg-amber-50 border-amber-200 text-amber-800'
+                                    }`}>
+                                        <div className="flex items-center gap-1.5 font-medium">
+                                            {isSplitValid ? (
+                                                <>
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                    <span>Total Allocated: {splitTotal.toFixed(2)} Tk (Matched)</span>
+                                                </>
+                                            ) : splitDiff > 0 ? (
+                                                <>
+                                                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                                                    <span>Remaining to allocate: {splitDiff.toFixed(2)} Tk</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <AlertCircle className="w-4 h-4 text-rose-600" />
+                                                    <span>Over-allocated by {Math.abs(splitDiff).toFixed(2)} Tk</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {!isSplitValid && splitDiff > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const lastIdx = data.payment_splits.length - 1;
+                                                    const currentAmt = parseFloat(data.payment_splits[lastIdx].amount) || 0;
+                                                    updateSplit(lastIdx, 'amount', (currentAmt + splitDiff).toFixed(2));
+                                                }}
+                                                className="text-[11px] underline font-bold hover:text-amber-900 cursor-pointer"
+                                            >
+                                                Auto-fill Remaining
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Submit Button */}
                             <div className="pt-2">
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="lg"
-                                    loading={processing}
-                                    className="w-full font-bold shadow-md shadow-teal-600/30"
-                                >
-                                    <Ticket className="w-5 h-5 mr-2" /> Book Serial & Issue Dual Token Slip
-                                </Button>
+                                {can('create-booking') ? (
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        size="lg"
+                                        loading={processing}
+                                        disabled={!isSplitValid}
+                                        className="w-full font-bold shadow-md shadow-teal-600/30"
+                                    >
+                                        <Ticket className="w-5 h-5 mr-2" /> Book Serial & Issue Dual Token Slip
+                                    </Button>
+                                ) : (
+                                    <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-500 font-semibold">
+                                        View-only mode. "create-booking" permission required to issue tokens.
+                                    </div>
+                                )}
                             </div>
                         </form>
                     </Card>
@@ -497,6 +761,27 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                             <p className="text-[11px] text-slate-500">
                                                 {visit.doctor?.name} ({visit.doctor?.doctor_profile?.room_number})
                                             </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                    {visit.invoice_number || visit.payment?.invoice_number || 'No Inv'}
+                                                </span>
+                                                {visit.payment?.splits && visit.payment.splits.length > 1 ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                                        Split ({visit.payment.splits.length})
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 capitalize border border-slate-200">
+                                                        {visit.payment?.payment_method === 'bank'
+                                                            ? `Bank: ${visit.payment?.bank_account?.bank_name || 'Bank'}`
+                                                            : visit.payment?.payment_method === 'mobile_banking'
+                                                            ? `Mobile: ${visit.payment?.bank_account?.bank_name || visit.payment?.bank_account?.account_name || 'Mobile'}`
+                                                            : 'Cash'}
+                                                    </span>
+                                                )}
+                                                <span className="text-[11px] font-mono font-bold text-teal-800">
+                                                    {parseFloat(visit.fee || 0).toFixed(2)} Tk
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <Button
@@ -507,6 +792,16 @@ export default function SerialBooking({ doctors = [], recentVisits = [], today, 
                                                     id: visit.id,
                                                     serial_number: visit.serial_number,
                                                     token_number: visit.token_number,
+                                                    invoice_number: visit.invoice_number || visit.payment?.invoice_number,
+                                                    payment_method: visit.payment?.payment_method || 'cash',
+                                                    bank_account_name: visit.payment?.bank_account ? (visit.payment.bank_account.bank_name || visit.payment.bank_account.account_name) : null,
+                                                    bank_account_number: visit.payment?.bank_account?.account_number,
+                                                    payment_splits: visit.payment?.splits?.map(s => ({
+                                                        payment_method: s.payment_method,
+                                                        amount: s.amount,
+                                                        bank_name: s.bank_account?.bank_name || s.bank_account?.account_name,
+                                                        account_number: s.bank_account?.account_number,
+                                                    })) || [],
                                                     visit_date: visit.visit_date,
                                                     patient_name: visit.patient?.name,
                                                     patient_phone: visit.patient?.phone,

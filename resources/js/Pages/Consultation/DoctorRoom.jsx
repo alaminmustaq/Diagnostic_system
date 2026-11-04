@@ -7,6 +7,7 @@ import Button from '../../Components/UI/Button';
 import Badge from '../../Components/UI/Badge';
 import TextInput from '../../Components/Form/TextInput';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import {
     Stethoscope,
     User as UserIcon,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 export default function DoctorRoom({ activeVisit, queue = [], currentDoctor, doctors = [], today }) {
+    const { can } = usePermissions();
     const [followUpDate, setFollowUpDate] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -229,7 +231,7 @@ export default function DoctorRoom({ activeVisit, queue = [], currentDoctor, doc
                             <p className="text-sm text-slate-500 max-w-md mt-1 mb-5">
                                 No patient is currently in the room. Call the next patient from the waiting queue to begin consultation.
                             </p>
-                            {nextWaiting ? (
+                            {nextWaiting && can('call-patient') ? (
                                 <Button
                                     variant="primary"
                                     size="lg"
@@ -238,6 +240,10 @@ export default function DoctorRoom({ activeVisit, queue = [], currentDoctor, doc
                                 >
                                     <PhoneCall className="w-5 h-5 mr-2" /> Call #{nextWaiting.serial_number}: {nextWaiting.patient?.name}
                                 </Button>
+                            ) : nextWaiting ? (
+                                <span className="text-xs text-slate-400 font-medium">
+                                    Patient #{nextWaiting.serial_number} ({nextWaiting.patient?.name}) is next in line.
+                                </span>
                             ) : (
                                 <span className="text-xs text-slate-400 font-medium">
                                     No patients currently waiting in queue.
@@ -280,7 +286,7 @@ export default function DoctorRoom({ activeVisit, queue = [], currentDoctor, doc
                                             </div>
                                         </div>
 
-                                        {item.status === 'waiting' && (
+                                        {item.status === 'waiting' && can('call-patient') && (
                                             <Button
                                                 variant="secondary"
                                                 size="sm"

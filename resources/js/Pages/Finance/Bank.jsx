@@ -10,9 +10,11 @@ import Modal from '../../Components/Modal/Modal';
 import ConfirmModal from '../../Components/Modal/ConfirmModal';
 import TextInput from '../../Components/Form/TextInput';
 import Toggle from '../../Components/Form/Toggle';
+import { usePermissions } from '../../Utils/permissions';
 import { Landmark, Plus, Edit2, Trash2, Search, Check, X } from 'lucide-react';
 
 export default function Bank({ accounts = [] }) {
+    const { can } = usePermissions();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState(null);
@@ -86,9 +88,11 @@ export default function Bank({ accounts = [] }) {
                 title="Bank Setup & Accounts"
                 subtitle="Manage corporate and branch bank accounts for clinic financial records"
                 actions={
-                    <Button variant="primary" onClick={openCreateModal}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Add Bank Account
-                    </Button>
+                    can('create-banks') && (
+                        <Button variant="primary" onClick={openCreateModal}>
+                            <Plus className="w-4 h-4 mr-1.5" /> Add Bank Account
+                        </Button>
+                    )
                 }
             />
 
@@ -120,7 +124,7 @@ export default function Bank({ accounts = [] }) {
                                 : 'Configure your first bank account to keep track of clinic banking details.'
                         }
                         action={
-                            !searchTerm && (
+                            !searchTerm && can('create-banks') && (
                                 <Button variant="primary" size="sm" onClick={openCreateModal}>
                                     <Plus className="w-4 h-4 mr-1.5" /> Add Bank Account
                                 </Button>
@@ -178,24 +182,31 @@ export default function Bank({ accounts = [] }) {
                                     </Td>
                                     <Td className="text-right">
                                         <div className="flex items-center justify-end gap-1.5">
-                                            <Button
-                                                variant="ghost"
-                                                size="xs"
-                                                onClick={() => openEditModal(account)}
-                                                className="text-slate-600 hover:text-teal-600"
-                                                title="Edit Account"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="xs"
-                                                onClick={() => setDeletingAccountId(account.id)}
-                                                className="text-slate-600 hover:text-rose-600"
-                                                title="Delete Account"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
+                                            {can('edit-banks') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() => openEditModal(account)}
+                                                    className="text-slate-600 hover:text-teal-600"
+                                                    title="Edit Account"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                            {can('delete-banks') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() => setDeletingAccountId(account.id)}
+                                                    className="text-slate-600 hover:text-rose-600"
+                                                    title="Delete Account"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            )}
+                                            {!can('edit-banks') && !can('delete-banks') && (
+                                                <span className="text-xs text-slate-400">View Only</span>
+                                            )}
                                         </div>
                                     </Td>
                                 </Tr>

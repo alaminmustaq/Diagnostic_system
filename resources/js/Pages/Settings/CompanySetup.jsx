@@ -6,9 +6,11 @@ import Card from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
 import TextInput from '../../Components/Form/TextInput';
 import Textarea from '../../Components/Form/Textarea';
+import { usePermissions } from '../../Utils/permissions';
 import { Building2, Phone, Mail, MapPin, Upload, Image, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function CompanySetup({ setting }) {
+    const { can } = usePermissions();
     const [logoPreview, setLogoPreview] = useState(setting?.logo_url || null);
     const fileInputRef = useRef(null);
 
@@ -195,15 +197,19 @@ export default function CompanySetup({ setting }) {
                             </div>
 
                             <div className="pt-3 border-t border-slate-100 flex justify-end">
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    size="md"
-                                    loading={processing}
-                                    className="font-bold shadow-md shadow-teal-600/30"
-                                >
-                                    <CheckCircle2 className="w-4 h-4 mr-1.5" /> Save Company Details
-                                </Button>
+                                {can('edit-company-settings') ? (
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        size="md"
+                                        loading={processing}
+                                        className="font-bold shadow-md shadow-teal-600/30"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Save Company Details
+                                    </Button>
+                                ) : (
+                                    <span className="text-xs text-slate-400 font-medium">View-only mode</span>
+                                )}
                             </div>
                         </form>
                     </Card>

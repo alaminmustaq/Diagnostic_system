@@ -44,6 +44,9 @@ class HandleInertiaRequests extends Middleware
                     'phone' => $request->user()->phone,
                     'role' => $request->user()->role,
                     'doctor_profile' => $request->user()->doctorProfile,
+                    'roles' => $request->user()->getRoleNames(),
+                    'permissions' => $request->user()->getAllPermissions()->pluck('name'),
+                    'is_super_admin' => $request->user()->hasRole('Super Admin') || ($request->user()->roles()->doesntExist() && $request->user()->role === 'admin'),
                 ] : null,
             ],
             'flash' => [

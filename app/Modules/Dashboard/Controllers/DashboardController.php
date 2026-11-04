@@ -4,6 +4,7 @@ namespace App\Modules\Dashboard\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\FollowUp;
+use App\Models\PatientTreatment;
 use App\Models\Payment;
 use App\Models\User;
 use App\Models\Visit;
@@ -35,6 +36,11 @@ class DashboardController extends Controller
 
         $todayVisits = (clone $visitsQuery)->orderBy('serial_number')->get();
 
+        $treatmentQueue = PatientTreatment::with(['patient', 'treatment.category', 'payment'])
+            ->whereDate('created_at', $today)
+            ->orderBy('id', 'asc')
+            ->get();
+
         $stats = [
             'total_visits' => $todayVisits->count(),
             'waiting' => $todayVisits->where('status', 'waiting')->count(),
@@ -51,6 +57,7 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', [
             'stats' => $stats,
             'todayVisits' => $todayVisits,
+            'treatmentQueue' => $treatmentQueue,
             'doctors' => $doctors,
             'selectedDoctorId' => $doctorId,
         ]);

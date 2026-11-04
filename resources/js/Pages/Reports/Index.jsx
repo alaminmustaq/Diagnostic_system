@@ -8,6 +8,8 @@ import Button from '../../Components/UI/Button';
 import Badge from '../../Components/UI/Badge';
 import SelectInput from '../../Components/Form/SelectInput';
 import InputLabel from '../../Components/Form/InputLabel';
+import TokenSlip from '../../Components/Print/TokenSlip';
+import InvoiceSlip from '../../Components/Print/InvoiceSlip';
 import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../../Components/Table';
 import {
     BarChart3,
@@ -22,6 +24,9 @@ import {
     CheckCircle2,
     TrendingUp,
     DoorOpen,
+    Landmark,
+    Smartphone,
+    Banknote,
 } from 'lucide-react';
 
 export default function Reports({
@@ -40,6 +45,9 @@ export default function Reports({
         payment_type: filters.payment_type || '',
         patient_id: filters.patient_id ? String(filters.patient_id) : '',
     });
+
+    const [activeVisitSlip, setActiveVisitSlip] = useState(null);
+    const [activeInvoiceSlip, setActiveInvoiceSlip] = useState(null);
 
     useEffect(() => {
         setFilterValues({
@@ -544,40 +552,176 @@ export default function Reports({
                             <Table>
                                 <Thead>
                                     <Tr>
+                                        <Th>Invoice #</Th>
                                         <Th>Date</Th>
-                                        <Th>Patient Name</Th>
-                                        <Th>Revenue Stream</Th>
+                                        <Th>Patient</Th>
+                                        <Th>Service / Source</Th>
+                                        <Th>Stream</Th>
+                                        <Th>Payment Method</Th>
                                         <Th>Base Amount</Th>
                                         <Th>Discount</Th>
                                         <Th align="right">Final Paid (Tk)</Th>
-                                        <Th>Collected By</Th>
+                                        <Th className="text-right">Action</Th>
                                     </Tr>
                                 </Thead>
                                 <Tbody>
-                                    {reportData.records.map((p) => (
-                                        <Tr key={p.id}>
-                                            <Td className="font-mono text-xs">{p.payment_date}</Td>
-                                            <Td className="font-bold">{p.patient?.name}</Td>
-                                            <Td>
-                                                <Badge variant={p.payment_type}>
-                                                    {p.payment_type === 'visit' ? 'Doctor Consultation' : 'Hospital Treatment'}
-                                                </Badge>
-                                            </Td>
-                                            <Td className="font-mono">{parseFloat(p.base_amount).toFixed(2)}</Td>
-                                            <Td className="text-rose-600 font-mono text-xs">
-                                                {parseFloat(p.discount_amount) > 0 ? `-${parseFloat(p.discount_amount).toFixed(2)}` : '—'}
-                                            </Td>
-                                            <Td align="right" className="font-mono font-extrabold text-teal-800 text-sm">
-                                                {parseFloat(p.final_paid_amount).toFixed(2)} Tk
-                                            </Td>
-                                            <Td className="text-xs text-slate-500">{p.collected_by?.name || 'Reception Desk'}</Td>
-                                        </Tr>
-                                    ))}
+                                    {reportData.records.map((p) => {
+                                        const isVisit = p.payment_type === 'visit';
+                                        const serviceLabel = isVisit
+                                            ? (p.visit?.doctor?.name ? `Dr. ${p.visit.doctor.name}` : 'Doctor Visit')
+                                            : (p.patient_treatments?.map(pt => pt.treatment?.name).filter(Boolean).join(', ') || 'Treatment POS');
+
+                                        return (
+                                            <Tr key={p.id}>
+                                                <Td className="font-mono text-xs font-bold text-slate-800">
+                                                    {p.invoice_number || `INV-${String(p.id).padStart(5, '0')}`}
+                                                </Td>
+                                                <Td className="font-mono text-xs">{p.payment_date}</Td>
+                                                <Td>
+                                                    <span className="font-bold text-slate-900 block">{p.patient?.name}</span>
+                                                    <span className="text-[11px] font-mono text-slate-500">{p.patient?.phone}</span>
+                                                </Td>
+                                                <Td className="text-xs text-slate-700 max-w-xs truncate" title={serviceLabel}>
+                                                    {serviceLabel}
+                                                </Td>
+                                                <Td>
+                                                    <Badge variant={p.payment_type}>
+                                                        {isVisit ? 'Consultation' : 'Treatment'}
+                                                    </Badge>
+                                                </Td>
+                                                <Td>
+                                                    {p.splits && p.splits.length > 1 ? (
+                                                        <div className="space-y-1">
+                                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                                                Split ({p.splits.length})
+                                                            </span>
+                                                            <div className="text-[10px] text-slate-600 space-y-0.5">
+                                                                {p.splits.map((s, idx) => (
+                                                                    <div key={idx} className="flex items-center justify-between gap-1">
+                                                                        <span className="capitalize text-slate-500 font-medium">
+                                                                            {s.payment_method === 'mobile_banking' ? 'Mobile' : s.payment_method}:
+                                                                        </span>
+                                                                        <span className="font-mono font-semibold text-slate-700">
+                                                                            {parseFloat(s.amount).toFixed(2)} Tk
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 capitalize">
+                                                            {p.payment_method === 'bank' ? (
+                                                                <>
+                                                                    <Landmark className="w-3 h-3 text-teal-600" />
+                                                                    <span>Bank: {p.bank_account?.bank_name || 'Bank'}</span>
+                                                                </>
+                                                            ) : p.payment_method === 'mobile_banking' ? (
+                                                                <>
+                                                                    <Smartphone className="w-3 h-3 text-teal-600" />
+                                                                    <span>Mobile: {p.bank_account?.bank_name || p.bank_account?.account_name || 'Mobile'}</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Banknote className="w-3 h-3 text-emerald-600" />
+                                                                    <span>Cash</span>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </Td>
+                                                <Td className="font-mono">{parseFloat(p.base_amount).toFixed(2)}</Td>
+                                                <Td className="text-rose-600 font-mono text-xs">
+                                                    {parseFloat(p.discount_amount) > 0 ? `-${parseFloat(p.discount_amount).toFixed(2)}` : '—'}
+                                                </Td>
+                                                <Td align="right" className="font-mono font-extrabold text-teal-800 text-sm">
+                                                    {parseFloat(p.final_paid_amount).toFixed(2)} Tk
+                                                </Td>
+                                                <Td className="text-right">
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="xs"
+                                                        onClick={() => {
+                                                            const splitsList = p.splits?.map((s) => ({
+                                                                payment_method: s.payment_method,
+                                                                amount: s.amount,
+                                                                bank_name: s.bank_account?.bank_name || s.bank_account?.account_name,
+                                                                account_number: s.bank_account?.account_number,
+                                                            })) || [];
+
+                                                            if (isVisit) {
+                                                                setActiveVisitSlip({
+                                                                    id: p.visit?.id,
+                                                                    serial_number: p.visit?.serial_number,
+                                                                    token_number: p.visit?.token_number,
+                                                                    invoice_number: p.invoice_number,
+                                                                    payment_method: p.payment_method || 'cash',
+                                                                    bank_account_name: p.bank_account ? (p.bank_account.bank_name || p.bank_account.account_name) : null,
+                                                                    bank_account_number: p.bank_account?.account_number,
+                                                                    payment_splits: splitsList,
+                                                                    visit_date: p.payment_date,
+                                                                    patient_name: p.patient?.name,
+                                                                    patient_phone: p.patient?.phone,
+                                                                    doctor_name: p.visit?.doctor?.name,
+                                                                    doctor_designation: p.visit?.doctor?.doctor_profile?.designation,
+                                                                    room_number: p.visit?.doctor?.doctor_profile?.room_number,
+                                                                    fee: p.final_paid_amount || '0.00',
+                                                                });
+                                                            } else {
+                                                                setActiveInvoiceSlip({
+                                                                    id: p.id,
+                                                                    invoice_no: p.invoice_number || `INV-TRT-${String(p.id).padStart(5, '0')}`,
+                                                                    token_number: p.patient_treatments?.[0]?.token_number,
+                                                                    payment_method: p.payment_method || 'cash',
+                                                                    bank_account_name: p.bank_account ? (p.bank_account.bank_name || p.bank_account.account_name) : null,
+                                                                    bank_account_number: p.bank_account?.account_number,
+                                                                    payment_splits: splitsList,
+                                                                    date: p.payment_date,
+                                                                    patient: {
+                                                                        user_code: p.patient?.user_code,
+                                                                        name: p.patient?.name,
+                                                                        phone: p.patient?.phone,
+                                                                    },
+                                                                    items: p.patient_treatments?.map((pt) => ({
+                                                                        name: pt.treatment?.name,
+                                                                        price: pt.treatment?.price,
+                                                                        room_number: pt.treatment?.room?.room_number,
+                                                                    })) || [],
+                                                                    base_amount: p.base_amount,
+                                                                    discount_type: p.discount_type,
+                                                                    discount_amount: p.discount_amount,
+                                                                    final_paid_amount: p.final_paid_amount,
+                                                                });
+                                                            }
+                                                        }}
+                                                        title="Print Slip / Invoice"
+                                                    >
+                                                        <Printer className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                </Td>
+                                            </Tr>
+                                        );
+                                    })}
                                 </Tbody>
                             </Table>
                         )}
                     </Card>
                 </div>
+            )}
+
+            {/* Visit Slip Modal */}
+            {activeVisitSlip && (
+                <TokenSlip
+                    visit={activeVisitSlip}
+                    onClose={() => setActiveVisitSlip(null)}
+                />
+            )}
+
+            {/* Treatment Invoice Modal */}
+            {activeInvoiceSlip && (
+                <InvoiceSlip
+                    invoice={activeInvoiceSlip}
+                    onClose={() => setActiveInvoiceSlip(null)}
+                />
             )}
         </AppLayout>
     );

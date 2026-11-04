@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 import PageHeader from '../Components/UI/PageHeader';
@@ -7,6 +7,7 @@ import Card from '../Components/UI/Card';
 import Badge from '../Components/UI/Badge';
 import Button from '../Components/UI/Button';
 import { Table, Thead, Tbody, Th, Td, Tr, EmptyState } from '../Components/Table';
+import { usePermissions } from '../Utils/permissions';
 import {
     Users,
     Clock,
@@ -22,7 +23,10 @@ import {
     Sparkles,
 } from 'lucide-react';
 
-export default function Dashboard({ stats, todayVisits = [], doctors = [], selectedDoctorId }) {
+export default function Dashboard({ stats, todayVisits = [], treatmentQueue = [], doctors = [], selectedDoctorId }) {
+    const { can } = usePermissions();
+    const [queueTab, setQueueTab] = useState('visits'); // 'visits' or 'treatments'
+
     const handleDoctorFilter = (e) => {
         const docId = e.target.value;
         router.get('/dashboard', docId ? { doctor_id: docId } : {}, { preserveState: true });
@@ -34,6 +38,16 @@ export default function Dashboard({ stats, todayVisits = [], doctors = [], selec
 
     const handleCompletePatient = (visitId) => {
         router.patch(`/consultation/visits/${visitId}/status`, { status: 'completed' });
+    };
+
+    const handleCancelPatient = (visitId) => {
+        if (confirm('Are you sure you want to cancel this serial?')) {
+            router.patch(`/consultation/visits/${visitId}/status`, { status: 'cancelled' });
+        }
+    };
+
+    const handleTreatmentStatusUpdate = (id, newStatus) => {
+        router.patch(`/consultation/treatments/${id}/status`, { status: newStatus });
     };
 
     return (
@@ -165,109 +179,256 @@ export default function Dashboard({ stats, todayVisits = [], doctors = [], selec
                 </Link>
             </div>
 
-            {/* Today's Live Queue Table */}
+            {/* Today's Live Queue Card with Tabs */}
             <Card
-                title="Today's Live Consultation Queue"
-                subtitle="Queue position, current state, and caller controls"
+                title="Today's Live Queue Board"
+                subtitle="Real-time patient tracking, serial caller, and treatment status management"
                 actions={
-                    <Link href="/consultation/queue">
-                        <Button variant="outline" size="sm">
-                            Full Queue Board →
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
+                            <button
+                                type="button"
+                                onClick={() => setQueueTab('visits')}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition ${
+                                    queueTab === 'visits'
+                                        ? 'bg-white text-teal-700 shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                Doctor Visits ({todayVisits.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setQueueTab('treatments')}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition ${
+                                    queueTab === 'treatments'
+                                        ? 'bg-white text-teal-700 shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                Treatment Queue ({treatmentQueue.length})
+                            </button>
+                        </div>
+                        <Link href="/consultation/queue">
+                            <Button variant="outline" size="sm">
+                                Full Queue Board →
+                            </Button>
+                        </Link>
+                    </div>
                 }
             >
-                {todayVisits.length === 0 ? (
-                    <EmptyState
-                        icon={Ticket}
-                        title="No visits booked yet today"
-                        description="Book the first patient serial to start today's queue."
-                        action={
-                            <Link href="/booking">
-                                <Button variant="primary" size="sm">
-                                    <Ticket className="w-4 h-4 mr-1.5" /> Book Serial Now
-                                </Button>
-                            </Link>
-                        }
-                    />
-                ) : (
-                    <Table>
-                        <Thead>
-                            <Tr>
-                                <Th>Serial #</Th>
-                                <Th>Token</Th>
-                                <Th>Patient</Th>
-                                <Th>Phone</Th>
-                                <Th>Doctor & Room</Th>
-                                <Th>Status</Th>
-                                <Th align="right">Action</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {todayVisits.map((visit) => (
-                                <Tr key={visit.id}>
-                                    <Td>
-                                        <span className="font-extrabold text-slate-900 text-sm font-mono">
-                                            #{visit.serial_number}
-                                        </span>
-                                    </Td>
-                                    <Td>
-                                        <span className="inline-block px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-mono text-xs font-bold border border-teal-200">
-                                            {visit.token_number}
-                                        </span>
-                                    </Td>
-                                    <Td>
-                                        <span className="font-bold text-slate-900">{visit.patient?.name}</span>
-                                    </Td>
-                                    <Td>
-                                        <span className="font-mono text-slate-600 text-xs">{visit.patient?.phone}</span>
-                                    </Td>
-                                    <Td>
-                                        <div>
-                                            <span className="font-semibold text-slate-800 text-xs block">
-                                                {visit.doctor?.name}
-                                            </span>
-                                            <span className="text-[11px] text-slate-500">
-                                                {visit.doctor?.doctor_profile?.room_number || 'Room'}
-                                            </span>
-                                        </div>
-                                    </Td>
-                                    <Td>
-                                        <Badge variant={visit.status}>
-                                            {visit.status === 'in_consultation' ? 'In Consultation' : visit.status.toUpperCase()}
-                                        </Badge>
-                                    </Td>
-                                    <Td align="right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            {visit.status === 'waiting' && (
-                                                <Button
-                                                    variant="primary"
-                                                    size="sm"
-                                                    onClick={() => handleCallPatient(visit.id)}
-                                                >
-                                                    <PhoneCall className="w-3.5 h-3.5 mr-1" /> Call In
-                                                </Button>
-                                            )}
-                                            {visit.status === 'in_consultation' && (
-                                                <Button
-                                                    variant="success"
-                                                    size="sm"
-                                                    onClick={() => handleCompletePatient(visit.id)}
-                                                >
-                                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Complete
-                                                </Button>
-                                            )}
-                                            {visit.status === 'completed' && (
-                                                <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Done
-                                                </span>
-                                            )}
-                                        </div>
-                                    </Td>
+                {queueTab === 'visits' ? (
+                    todayVisits.length === 0 ? (
+                        <EmptyState
+                            icon={Ticket}
+                            title="No visits booked yet today"
+                            description="Book the first patient serial to start today's queue."
+                            action={
+                                <Link href="/booking">
+                                    <Button variant="primary" size="sm">
+                                        <Ticket className="w-4 h-4 mr-1.5" /> Book Serial Now
+                                    </Button>
+                                </Link>
+                            }
+                        />
+                    ) : (
+                        <Table>
+                            <Thead>
+                                <Tr>
+                                    <Th>Serial #</Th>
+                                    <Th>Token</Th>
+                                    <Th>Patient</Th>
+                                    <Th>Phone</Th>
+                                    <Th>Doctor & Room</Th>
+                                    <Th>Status</Th>
+                                    <Th align="right">Action</Th>
                                 </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
+                            </Thead>
+                            <Tbody>
+                                {todayVisits.map((visit) => (
+                                    <Tr key={visit.id}>
+                                        <Td>
+                                            <span className="font-extrabold text-slate-900 text-sm font-mono">
+                                                #{visit.serial_number}
+                                            </span>
+                                        </Td>
+                                        <Td>
+                                            <span className="inline-block px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-mono text-xs font-bold border border-teal-200">
+                                                {visit.token_number}
+                                            </span>
+                                        </Td>
+                                        <Td>
+                                            <span className="font-bold text-slate-900">{visit.patient?.name}</span>
+                                        </Td>
+                                        <Td>
+                                            <span className="font-mono text-slate-600 text-xs">{visit.patient?.phone}</span>
+                                        </Td>
+                                        <Td>
+                                            <div>
+                                                <span className="font-semibold text-slate-800 text-xs block">
+                                                    {visit.doctor?.name}
+                                                </span>
+                                                <span className="text-[11px] text-slate-500">
+                                                    {visit.doctor?.doctor_profile?.room_number || 'Room'}
+                                                </span>
+                                            </div>
+                                        </Td>
+                                        <Td>
+                                            <Badge variant={visit.status}>
+                                                {visit.status === 'in_consultation' ? 'In Consultation' : visit.status.toUpperCase()}
+                                            </Badge>
+                                        </Td>
+                                        <Td align="right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {visit.status === 'waiting' && can('call-patient') && (
+                                                    <Button
+                                                        variant="primary"
+                                                        size="sm"
+                                                        onClick={() => handleCallPatient(visit.id)}
+                                                    >
+                                                        <PhoneCall className="w-3.5 h-3.5 mr-1" /> Call In
+                                                    </Button>
+                                                )}
+                                                {visit.status === 'in_consultation' && (can('update-consultation-queue') || can('call-patient')) && (
+                                                    <Button
+                                                        variant="success"
+                                                        size="sm"
+                                                        onClick={() => handleCompletePatient(visit.id)}
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Complete
+                                                    </Button>
+                                                )}
+                                                {visit.status === 'completed' && (
+                                                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                                                    </span>
+                                                )}
+                                                {visit.status !== 'cancelled' && visit.status !== 'completed' && can('cancel-serial') && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleCancelPatient(visit.id)}
+                                                        title="Cancel Serial"
+                                                        className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                                    >
+                                                        <XCircle className="w-4 h-4" />
+                                                    </Button>
+                                                )}
+                                                {visit.status === 'waiting' && !can('call-patient') && !can('cancel-serial') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
+                                            </div>
+                                        </Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    )
+                ) : (
+                    treatmentQueue.length === 0 ? (
+                        <EmptyState
+                            icon={Sparkles}
+                            title="No treatments queued today"
+                            description="Issue treatment services from POS to view and advance clinic procedures."
+                            action={
+                                <Link href="/pos">
+                                    <Button variant="primary" size="sm">
+                                        <Sparkles className="w-4 h-4 mr-1.5" /> Open Treatment POS
+                                    </Button>
+                                </Link>
+                            }
+                        />
+                    ) : (
+                        <Table>
+                            <Thead>
+                                <Tr>
+                                    <Th>Token</Th>
+                                    <Th>Patient</Th>
+                                    <Th>Phone</Th>
+                                    <Th>Treatment Service</Th>
+                                    <Th>Status</Th>
+                                    <Th align="right">Action</Th>
+                                </Tr>
+                            </Thead>
+                            <Tbody>
+                                {treatmentQueue.map((item) => (
+                                    <Tr key={item.id}>
+                                        <Td>
+                                            <span className="inline-block px-2 py-0.5 rounded bg-purple-50 text-purple-800 font-mono text-xs font-bold border border-purple-200">
+                                                {item.token_number}
+                                            </span>
+                                        </Td>
+                                        <Td>
+                                            <span className="font-bold text-slate-900">{item.patient?.name}</span>
+                                        </Td>
+                                        <Td>
+                                            <span className="font-mono text-slate-600 text-xs">{item.patient?.phone}</span>
+                                        </Td>
+                                        <Td>
+                                            <div className="flex items-center gap-2">
+                                                {item.treatment?.color && (
+                                                    <span
+                                                        className="w-3 h-3 rounded-full shrink-0 border border-black/10"
+                                                        style={{ backgroundColor: item.treatment.color }}
+                                                    />
+                                                )}
+                                                <div>
+                                                    <span className="font-bold text-slate-800 text-xs block">
+                                                        {item.treatment?.name}
+                                                    </span>
+                                                    <span className="text-[11px] text-slate-500">
+                                                        {item.treatment?.category?.name || 'General'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </Td>
+                                        <Td>
+                                            <Badge variant={item.status}>
+                                                {item.status === 'in_collection'
+                                                    ? 'In Collection'
+                                                    : item.status === 'sample'
+                                                    ? 'Sample (Done)'
+                                                    : 'Waiting'}
+                                            </Badge>
+                                        </Td>
+                                        <Td align="right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {item.status === 'waiting' && can('in-collection') && (
+                                                    <Button
+                                                        variant="primary"
+                                                        size="sm"
+                                                        onClick={() => handleTreatmentStatusUpdate(item.id, 'in_collection')}
+                                                    >
+                                                        <Clock className="w-3.5 h-3.5 mr-1" /> In Collection
+                                                    </Button>
+                                                )}
+                                                {item.status === 'in_collection' && can('sample') && (
+                                                    <Button
+                                                        variant="success"
+                                                        size="sm"
+                                                        onClick={() => handleTreatmentStatusUpdate(item.id, 'sample')}
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Sample (Done)
+                                                    </Button>
+                                                )}
+                                                {item.status === 'sample' && (
+                                                    <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Treatment Done
+                                                    </span>
+                                                )}
+                                                {item.status === 'waiting' && !can('in-collection') && (
+                                                    <span className="text-xs text-slate-400">View Only</span>
+                                                )}
+                                                {item.status === 'in_collection' && !can('sample') && (
+                                                    <span className="text-xs text-slate-400">In Progress</span>
+                                                )}
+                                            </div>
+                                        </Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    )
                 )}
             </Card>
         </AppLayout>
